@@ -3100,6 +3100,10 @@ function Subscriptions({ state, setState, actor, selectedGroup, setConfirmDialog
                 ondismiss: () => reject(new Error("Payment cancelled."))
               }
             });
+            razorpay.on("payment.failed", (response) => {
+              const description = response?.error?.description || response?.error?.reason || "Payment failed.";
+              reject(new Error(description));
+            });
             razorpay.open();
           });
 
