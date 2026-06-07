@@ -480,6 +480,50 @@ async function createFinancialTransaction({ transaction, parentId = null, adjust
   return mapTransaction(header, lines);
 }
 
+function describeFunctionError(error, functionName) {
+  const message = error?.message ?? String(error ?? "");
+  if (message.toLowerCase().includes("failed to send a request")) {
+    return new Error(`Unable to reach Supabase Edge Function "${functionName}". Deploy it in Supabase and confirm Edge Function secrets are configured.`);
+  }
+  return error instanceof Error ? error : new Error(message);
+}
+
+async function invokeFunctionJson(functionName, body) {
+  const client = requireClient();
+  const { data: sessionResult, error: sessionError } = await client.auth.getSession();
+  if (sessionError) throw sessionError;
+  const accessToken = sessionResult.session?.access_token;
+  if (!accessToken) throw new Error("Please login again before making this payment.");
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  const response = await fetch(`${supabaseUrl}/functions/v1/${functionName}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      apikey: supabaseAnonKey,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(body)
+  });
+
+  const text = await response.text();
+  let payload = {};
+  try {
+    payload = text ? JSON.parse(text) : {};
+  } catch {
+    payload = { error: text };
+  }
+
+  if (!response.ok) {
+    const message = payload?.error || payload?.message || `Edge Function "${functionName}" returned ${response.status}.`;
+    const details = payload?.details ? ` Details: ${JSON.stringify(payload.details)}` : "";
+    throw new Error(`${message}${details}`);
+  }
+  if (payload?.error) throw new Error(payload.error);
+  return payload;
+}
+
 export const repository = {
   isConfigured() {
     return Boolean(supabase);
@@ -1332,23 +1376,19 @@ export const repository = {
   },
 
   async createRazorpayOrder({ groupId, planName, duration }) {
-    const client = requireClient();
-    const { data, error } = await client.functions.invoke("create-razorpay-order", {
-      body: { groupId, planName, duration }
-    });
-    if (error) throw error;
-    if (data?.error) throw new Error(data.error);
-    return data;
+    try {
+      return await invokeFunctionJson("create-razorpay-order", { groupId, planName, duration });
+    } catch (error) {
+      throw describeFunctionError(error, "create-razorpay-order");
+    }
   },
 
   async verifyRazorpayPayment(payload) {
-    const client = requireClient();
-    const { data, error } = await client.functions.invoke("verify-razorpay-payment", {
-      body: payload
-    });
-    if (error) throw error;
-    if (data?.error) throw new Error(data.error);
-    return data;
+    try {
+      return await invokeFunctionJson("verify-razorpay-payment", payload);
+    } catch (error) {
+      throw describeFunctionError(error, "verify-razorpay-payment");
+    }
   },
 
   async listTenantData() {
