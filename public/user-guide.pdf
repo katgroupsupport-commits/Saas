@@ -1,0 +1,706 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [6 0 R 8 0 R 10 0 R 12 0 R 14 0 R 16 0 R 18 0 R 20 0 R 22 0 R] /Count 9 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+5 0 obj
+<< /Length 5435 >>
+stream
+0.06 0.14 0.25 rg 0 785 595 57 re f
+0.06 0.14 0.25 RG 0.8 w 0 785 595 57 re S
+BT /F2 18 Tf 1 1 1 rg 42 815 Td (Bachat Gat SaaS) Tj ET
+BT /F1 10 Tf 0.86 0.93 0.96 rg 42 796 Td (Complete process flow) Tj ET
+BT /F2 16 Tf 0.06 0.14 0.25 rg 42 746 Td (Follow this order when starting a new group.) Tj ET
+BT /F1 10 Tf 0.38 0.44 0.52 rg 42 724 Td (Completed records show in dashboard and reports. Pending approvals do not change balances.) Tj ET
+0.93 0.99 0.96 rg 38 677 519 28 re f
+0.78 0.9 0.87 RG 0.8 w 38 677 519 28 re S
+BT /F2 13 Tf 0.06 0.45 0.41 rg 52 686 Td (Full app flow) Tj ET
+0.94 0.97 1 rg 42 596 92 42 re f
+0.78 0.84 0.9 RG 0.8 w 42 596 92 42 re S
+BT /F2 9 Tf 0.06 0.45 0.41 rg 49 621 Td (1) Tj ET
+BT /F2 8 Tf 0.06 0.14 0.25 rg 65 622 Td (Register) Tj ET
+0.93 0.99 0.96 rg 146 596 92 42 re f
+0.78 0.84 0.9 RG 0.8 w 146 596 92 42 re S
+BT /F2 9 Tf 0.06 0.45 0.41 rg 153 621 Td (2) Tj ET
+BT /F2 8 Tf 0.06 0.14 0.25 rg 169 622 Td (Login) Tj ET
+0.94 0.97 1 rg 250 596 92 42 re f
+0.78 0.84 0.9 RG 0.8 w 250 596 92 42 re S
+BT /F2 9 Tf 0.06 0.45 0.41 rg 257 621 Td (3) Tj ET
+BT /F2 8 Tf 0.06 0.14 0.25 rg 273 622 Td (Create group) Tj ET
+0.93 0.99 0.96 rg 354 596 92 42 re f
+0.78 0.84 0.9 RG 0.8 w 354 596 92 42 re S
+BT /F2 9 Tf 0.06 0.45 0.41 rg 361 621 Td (4) Tj ET
+BT /F2 8 Tf 0.06 0.14 0.25 rg 377 622 Td (Add members) Tj ET
+0.94 0.97 1 rg 458 596 92 42 re f
+0.78 0.84 0.9 RG 0.8 w 458 596 92 42 re S
+BT /F2 9 Tf 0.06 0.45 0.41 rg 465 621 Td (5) Tj ET
+BT /F2 8 Tf 0.06 0.14 0.25 rg 481 622 Td (Group setup) Tj ET
+0.93 0.99 0.96 rg 42 536 92 42 re f
+0.78 0.84 0.9 RG 0.8 w 42 536 92 42 re S
+BT /F2 9 Tf 0.06 0.45 0.41 rg 49 561 Td (6) Tj ET
+BT /F2 8 Tf 0.06 0.14 0.25 rg 65 562 Td (Member setup) Tj ET
+0.94 0.97 1 rg 146 536 92 42 re f
+0.78 0.84 0.9 RG 0.8 w 146 536 92 42 re S
+BT /F2 9 Tf 0.06 0.45 0.41 rg 153 561 Td (7) Tj ET
+BT /F2 8 Tf 0.06 0.14 0.25 rg 169 562 Td (Financial) Tj ET
+BT /F2 8 Tf 0.06 0.14 0.25 rg 169 551 Td (setup) Tj ET
+0.93 0.99 0.96 rg 250 536 92 42 re f
+0.78 0.84 0.9 RG 0.8 w 250 536 92 42 re S
+BT /F2 9 Tf 0.06 0.45 0.41 rg 257 561 Td (8) Tj ET
+BT /F2 8 Tf 0.06 0.14 0.25 rg 273 562 Td (Legacy) Tj ET
+BT /F2 8 Tf 0.06 0.14 0.25 rg 273 551 Td (migration) Tj ET
+0.94 0.97 1 rg 354 536 92 42 re f
+0.78 0.84 0.9 RG 0.8 w 354 536 92 42 re S
+BT /F2 9 Tf 0.06 0.45 0.41 rg 361 561 Td (9) Tj ET
+BT /F2 8 Tf 0.06 0.14 0.25 rg 377 562 Td (Transactions) Tj ET
+0.93 0.99 0.96 rg 458 536 92 42 re f
+0.78 0.84 0.9 RG 0.8 w 458 536 92 42 re S
+BT /F2 9 Tf 0.06 0.45 0.41 rg 465 561 Td (10) Tj ET
+BT /F2 8 Tf 0.06 0.14 0.25 rg 481 562 Td (Approval flow) Tj ET
+0.94 0.97 1 rg 42 476 92 42 re f
+0.78 0.84 0.9 RG 0.8 w 42 476 92 42 re S
+BT /F2 9 Tf 0.06 0.45 0.41 rg 49 501 Td (11) Tj ET
+BT /F2 8 Tf 0.06 0.14 0.25 rg 65 502 Td (Loan request) Tj ET
+0.93 0.99 0.96 rg 146 476 92 42 re f
+0.78 0.84 0.9 RG 0.8 w 146 476 92 42 re S
+BT /F2 9 Tf 0.06 0.45 0.41 rg 153 501 Td (12) Tj ET
+BT /F2 8 Tf 0.06 0.14 0.25 rg 169 502 Td (Loan approval) Tj ET
+0.94 0.97 1 rg 250 476 92 42 re f
+0.78 0.84 0.9 RG 0.8 w 250 476 92 42 re S
+BT /F2 9 Tf 0.06 0.45 0.41 rg 257 501 Td (13) Tj ET
+BT /F2 8 Tf 0.06 0.14 0.25 rg 273 502 Td (Withdrawal) Tj ET
+BT /F2 8 Tf 0.06 0.14 0.25 rg 273 491 Td (request) Tj ET
+0.93 0.99 0.96 rg 354 476 92 42 re f
+0.78 0.84 0.9 RG 0.8 w 354 476 92 42 re S
+BT /F2 9 Tf 0.06 0.45 0.41 rg 361 501 Td (14) Tj ET
+BT /F2 8 Tf 0.06 0.14 0.25 rg 377 502 Td (Withdrawal) Tj ET
+BT /F2 8 Tf 0.06 0.14 0.25 rg 377 491 Td (approval) Tj ET
+0.94 0.97 1 rg 458 476 92 42 re f
+0.78 0.84 0.9 RG 0.8 w 458 476 92 42 re S
+BT /F2 9 Tf 0.06 0.45 0.41 rg 465 501 Td (15) Tj ET
+BT /F2 8 Tf 0.06 0.14 0.25 rg 481 502 Td (Adjustment /) Tj ET
+BT /F2 8 Tf 0.06 0.14 0.25 rg 481 491 Td (reversal) Tj ET
+0.93 0.99 0.96 rg 42 416 92 42 re f
+0.78 0.84 0.9 RG 0.8 w 42 416 92 42 re S
+BT /F2 9 Tf 0.06 0.45 0.41 rg 49 441 Td (16) Tj ET
+BT /F2 8 Tf 0.06 0.14 0.25 rg 65 442 Td (Correction) Tj ET
+BT /F2 8 Tf 0.06 0.14 0.25 rg 65 431 Td (approval) Tj ET
+0.94 0.97 1 rg 146 416 92 42 re f
+0.78 0.84 0.9 RG 0.8 w 146 416 92 42 re S
+BT /F2 9 Tf 0.06 0.45 0.41 rg 153 441 Td (17) Tj ET
+BT /F2 8 Tf 0.06 0.14 0.25 rg 169 442 Td (Base tables) Tj ET
+0.93 0.99 0.96 rg 250 416 92 42 re f
+0.78 0.84 0.9 RG 0.8 w 250 416 92 42 re S
+BT /F2 9 Tf 0.06 0.45 0.41 rg 257 441 Td (18) Tj ET
+BT /F2 8 Tf 0.06 0.14 0.25 rg 273 442 Td (Dashboard) Tj ET
+BT /F2 8 Tf 0.06 0.14 0.25 rg 273 431 Td (reports) Tj ET
+0.93 0.99 0.96 rg 38 209 519 28 re f
+0.78 0.9 0.87 RG 0.8 w 38 209 519 28 re S
+BT /F2 13 Tf 0.06 0.45 0.41 rg 52 218 Td (Quick flows) Tj ET
+0.94 0.97 1 rg 42 136 104 58 re f
+0.78 0.84 0.9 RG 0.8 w 42 136 104 58 re S
+BT /F2 12 Tf 0.06 0.45 0.41 rg 52 173 Td (1) Tj ET
+BT /F2 10 Tf 0.06 0.14 0.25 rg 72 174 Td (Select member) Tj ET
+BT /F2 16 Tf 0.79 0.54 0.02 rg 154 160 Td (>) Tj ET
+0.93 0.99 0.96 rg 169 136 104 58 re f
+0.78 0.84 0.9 RG 0.8 w 169 136 104 58 re S
+BT /F2 12 Tf 0.06 0.45 0.41 rg 179 173 Td (2) Tj ET
+BT /F2 10 Tf 0.06 0.14 0.25 rg 199 174 Td (Enter amount) Tj ET
+BT /F2 16 Tf 0.79 0.54 0.02 rg 281 160 Td (>) Tj ET
+0.94 0.97 1 rg 296 136 104 58 re f
+0.78 0.84 0.9 RG 0.8 w 296 136 104 58 re S
+BT /F2 12 Tf 0.06 0.45 0.41 rg 306 173 Td (3) Tj ET
+BT /F2 10 Tf 0.06 0.14 0.25 rg 326 174 Td (Check split) Tj ET
+BT /F2 16 Tf 0.79 0.54 0.02 rg 408 160 Td (>) Tj ET
+0.93 0.99 0.96 rg 423 136 104 58 re f
+0.78 0.84 0.9 RG 0.8 w 423 136 104 58 re S
+BT /F2 12 Tf 0.06 0.45 0.41 rg 433 173 Td (4) Tj ET
+BT /F2 10 Tf 0.06 0.14 0.25 rg 453 174 Td (Save) Tj ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 5 0 R >>
+endobj
+7 0 obj
+<< /Length 3103 >>
+stream
+0.06 0.14 0.25 rg 0 785 595 57 re f
+0.06 0.14 0.25 RG 0.8 w 0 785 595 57 re S
+BT /F2 18 Tf 1 1 1 rg 42 815 Td (Bachat Gat SaaS) Tj ET
+BT /F1 10 Tf 0.86 0.93 0.96 rg 42 796 Td (Main features) Tj ET
+0.93 0.99 0.96 rg 38 737 519 28 re f
+0.78 0.9 0.87 RG 0.8 w 38 737 519 28 re S
+BT /F2 13 Tf 0.06 0.45 0.41 rg 52 746 Td (What users can do) Tj ET
+0.93 0.99 0.96 rg 42 650 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 42 650 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 54 689 Td (Member login) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 673 Td (Member registers with the same) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 661 Td (email used while adding member.) Tj ET
+0.93 0.99 0.96 rg 306 650 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 306 650 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 318 689 Td (See own groups) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 673 Td (After login, member can see all) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 661 Td (groups where that email is added.) Tj ET
+0.93 0.99 0.96 rg 42 576 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 42 576 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 54 615 Td (Create new group) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 599 Td (Logged-in user can create new) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 587 Td (group and becomes group admin.) Tj ET
+0.93 0.99 0.96 rg 306 576 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 306 576 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 318 615 Td (Dashboard access) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 599 Td (Members can freely see their own) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 587 Td (dashboard and group summary.) Tj ET
+0.93 0.99 0.96 rg 42 502 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 42 502 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 54 541 Td (Active / inactive) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 525 Td (Inactive members stop getting) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 513 Td (future event profit share.) Tj ET
+0.93 0.99 0.96 rg 306 502 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 306 502 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 318 541 Td (Role restriction) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 525 Td (Admin manages setup. Member gets) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 513 Td (view and own loan request access.) Tj ET
+0.93 0.99 0.96 rg 42 428 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 42 428 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 54 467 Td (Withdrawal) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 451 Td (Member requests self withdrawal.) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 439 Td (Admin can request for any member.) Tj ET
+0.93 0.99 0.96 rg 306 428 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 306 428 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 318 467 Td (Period restriction) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 451 Td (If a period is open, entries are) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 439 Td (allowed only in that period.) Tj ET
+0.93 0.99 0.96 rg 42 354 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 42 354 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 54 393 Td (Corrections) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 377 Td (Wrong entries use adjustment or) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 365 Td (reversal. Original entry stays) Tj ET
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 7 0 R >>
+endobj
+9 0 obj
+<< /Length 3874 >>
+stream
+0.06 0.14 0.25 rg 0 785 595 57 re f
+0.06 0.14 0.25 RG 0.8 w 0 785 595 57 re S
+BT /F2 18 Tf 1 1 1 rg 42 815 Td (Bachat Gat SaaS) Tj ET
+BT /F1 10 Tf 0.86 0.93 0.96 rg 42 796 Td (Setup values and when to use them) Tj ET
+0.93 0.99 0.96 rg 38 737 519 28 re f
+0.78 0.9 0.87 RG 0.8 w 38 737 519 28 re S
+BT /F2 13 Tf 0.06 0.45 0.41 rg 52 746 Td (Setup flow) Tj ET
+0.94 0.97 1 rg 42 664 104 58 re f
+0.78 0.84 0.9 RG 0.8 w 42 664 104 58 re S
+BT /F2 12 Tf 0.06 0.45 0.41 rg 52 701 Td (1) Tj ET
+BT /F2 10 Tf 0.06 0.14 0.25 rg 72 702 Td (Group setup) Tj ET
+BT /F2 16 Tf 0.79 0.54 0.02 rg 154 688 Td (>) Tj ET
+0.93 0.99 0.96 rg 169 664 104 58 re f
+0.78 0.84 0.9 RG 0.8 w 169 664 104 58 re S
+BT /F2 12 Tf 0.06 0.45 0.41 rg 179 701 Td (2) Tj ET
+BT /F2 10 Tf 0.06 0.14 0.25 rg 199 702 Td (Member setup) Tj ET
+BT /F2 16 Tf 0.79 0.54 0.02 rg 281 688 Td (>) Tj ET
+0.94 0.97 1 rg 296 664 104 58 re f
+0.78 0.84 0.9 RG 0.8 w 296 664 104 58 re S
+BT /F2 12 Tf 0.06 0.45 0.41 rg 306 701 Td (3) Tj ET
+BT /F2 10 Tf 0.06 0.14 0.25 rg 326 702 Td (Loan setup) Tj ET
+BT /F2 16 Tf 0.79 0.54 0.02 rg 408 688 Td (>) Tj ET
+0.93 0.99 0.96 rg 423 664 104 58 re f
+0.78 0.84 0.9 RG 0.8 w 423 664 104 58 re S
+BT /F2 12 Tf 0.06 0.45 0.41 rg 433 701 Td (4) Tj ET
+BT /F2 10 Tf 0.06 0.14 0.25 rg 453 702 Td (Approver setup) Tj ET
+1 0.98 0.92 rg 42 548 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 42 548 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 54 587 Td (Monthly saving) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 571 Td (Default amount every member should) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 559 Td (pay each month.) Tj ET
+1 0.98 0.92 rg 306 548 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 306 548 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 318 587 Td (Interest rate) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 571 Td (Monthly rate. Example: 2 means 2) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 559 Td (percent per month.) Tj ET
+1 0.98 0.92 rg 42 474 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 42 474 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 54 513 Td (Penalty) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 497 Td (Late payment charge. Keep 0 if the) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 485 Td (group does not use penalty.) Tj ET
+1 0.98 0.92 rg 306 474 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 306 474 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 318 513 Td (Loan limit) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 497 Td (Maximum loan allowed. Member setup) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 485 Td (can override group setup.) Tj ET
+1 0.98 0.92 rg 42 400 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 42 400 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 54 439 Td (Loan tenure) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 423 Td (Number of months allowed to repay) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 411 Td (the loan.) Tj ET
+1 0.98 0.92 rg 306 400 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 306 400 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 318 439 Td (Due day) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 423 Td (Monthly date by which loan) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 411 Td (repayment should be paid.) Tj ET
+1 0.98 0.92 rg 42 326 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 42 326 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 54 365 Td (Approvers) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 349 Td (People who approve loan,) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 337 Td (transaction, migration and) Tj ET
+1 0.98 0.92 rg 306 326 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 306 326 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 318 365 Td (Open period) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 349 Td (Only one month should be open when) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 337 Td (entries are being posted.) Tj ET
+BT /F2 10 Tf 0.06 0.45 0.41 rg 42 92 Td (Rule: member setup value is used first. If blank or zero, group setup value is used.) Tj ET
+BT /F2 10 Tf 0.06 0.45 0.41 rg 42 72 Td (Use financial setup before regular transactions so calculation stays correct.) Tj ET
+endstream
+endobj
+10 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 9 0 R >>
+endobj
+11 0 obj
+<< /Length 4556 >>
+stream
+0.06 0.14 0.25 rg 0 785 595 57 re f
+0.06 0.14 0.25 RG 0.8 w 0 785 595 57 re S
+BT /F2 18 Tf 1 1 1 rg 42 815 Td (Bachat Gat SaaS) Tj ET
+BT /F1 10 Tf 0.86 0.93 0.96 rg 42 796 Td (Legacy migration and expense handling) Tj ET
+0.93 0.99 0.96 rg 38 737 519 28 re f
+0.78 0.9 0.87 RG 0.8 w 38 737 519 28 re S
+BT /F2 13 Tf 0.06 0.45 0.41 rg 52 746 Td (Legacy migration flow) Tj ET
+0.94 0.97 1 rg 42 664 104 58 re f
+0.78 0.84 0.9 RG 0.8 w 42 664 104 58 re S
+BT /F2 12 Tf 0.06 0.45 0.41 rg 52 701 Td (1) Tj ET
+BT /F2 10 Tf 0.06 0.14 0.25 rg 72 702 Td (Choose member) Tj ET
+BT /F2 16 Tf 0.79 0.54 0.02 rg 154 688 Td (>) Tj ET
+0.93 0.99 0.96 rg 169 664 104 58 re f
+0.78 0.84 0.9 RG 0.8 w 169 664 104 58 re S
+BT /F2 12 Tf 0.06 0.45 0.41 rg 179 701 Td (2) Tj ET
+BT /F2 10 Tf 0.06 0.14 0.25 rg 199 702 Td (Enter old) Tj ET
+BT /F2 10 Tf 0.06 0.14 0.25 rg 199 688 Td (balance) Tj ET
+BT /F2 16 Tf 0.79 0.54 0.02 rg 281 688 Td (>) Tj ET
+0.94 0.97 1 rg 296 664 104 58 re f
+0.78 0.84 0.9 RG 0.8 w 296 664 104 58 re S
+BT /F2 12 Tf 0.06 0.45 0.41 rg 306 701 Td (3) Tj ET
+BT /F2 10 Tf 0.06 0.14 0.25 rg 326 702 Td (Check) Tj ET
+BT /F2 10 Tf 0.06 0.14 0.25 rg 326 688 Td (loan/expense) Tj ET
+BT /F2 16 Tf 0.79 0.54 0.02 rg 408 688 Td (>) Tj ET
+0.93 0.99 0.96 rg 423 664 104 58 re f
+0.78 0.84 0.9 RG 0.8 w 423 664 104 58 re S
+BT /F2 12 Tf 0.06 0.45 0.41 rg 433 701 Td (4) Tj ET
+BT /F2 10 Tf 0.06 0.14 0.25 rg 453 702 Td (Migrate) Tj ET
+0.94 0.97 1 rg 42 548 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 42 548 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 54 587 Td (When to use) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 571 Td (Use when moving old) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 559 Td (notebook/register balance to this) Tj ET
+0.94 0.97 1 rg 306 548 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 306 548 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 318 587 Td (Saving balance) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 571 Td (Old saved amount held by the) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 559 Td (member.) Tj ET
+0.94 0.97 1 rg 42 474 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 42 474 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 54 513 Td (Pending loan) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 497 Td (Old loan amount still pending from) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 485 Td (that member.) Tj ET
+0.94 0.97 1 rg 306 474 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 306 474 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 318 513 Td (Old interest) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 497 Td (Interest already pending before) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 485 Td (using the app.) Tj ET
+0.94 0.97 1 rg 42 400 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 42 400 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 54 439 Td (Old group gain) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 423 Td (Profit already earned by group) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 411 Td (before app start.) Tj ET
+0.94 0.97 1 rg 306 400 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 306 400 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 318 439 Td (Old expense) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 423 Td (Expense already spent by group) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 411 Td (before app start.) Tj ET
+0.93 0.99 0.96 rg 38 265 519 28 re f
+0.78 0.9 0.87 RG 0.8 w 38 265 519 28 re S
+BT /F2 13 Tf 0.06 0.45 0.41 rg 52 274 Td (Expense flow) Tj ET
+0.94 0.97 1 rg 42 192 104 58 re f
+0.78 0.84 0.9 RG 0.8 w 42 192 104 58 re S
+BT /F2 12 Tf 0.06 0.45 0.41 rg 52 229 Td (1) Tj ET
+BT /F2 10 Tf 0.06 0.14 0.25 rg 72 230 Td (Enter expense) Tj ET
+BT /F2 16 Tf 0.79 0.54 0.02 rg 154 216 Td (>) Tj ET
+0.93 0.99 0.96 rg 169 192 104 58 re f
+0.78 0.84 0.9 RG 0.8 w 169 192 104 58 re S
+BT /F2 12 Tf 0.06 0.45 0.41 rg 179 229 Td (2) Tj ET
+BT /F2 10 Tf 0.06 0.14 0.25 rg 199 230 Td (Add split lines) Tj ET
+BT /F2 16 Tf 0.79 0.54 0.02 rg 281 216 Td (>) Tj ET
+0.94 0.97 1 rg 296 192 104 58 re f
+0.78 0.84 0.9 RG 0.8 w 296 192 104 58 re S
+BT /F2 12 Tf 0.06 0.45 0.41 rg 306 229 Td (3) Tj ET
+BT /F2 10 Tf 0.06 0.14 0.25 rg 326 230 Td (Total must) Tj ET
+BT /F2 10 Tf 0.06 0.14 0.25 rg 326 216 Td (match) Tj ET
+BT /F2 16 Tf 0.79 0.54 0.02 rg 408 216 Td (>) Tj ET
+0.93 0.99 0.96 rg 423 192 104 58 re f
+0.78 0.84 0.9 RG 0.8 w 423 192 104 58 re S
+BT /F2 12 Tf 0.06 0.45 0.41 rg 433 229 Td (4) Tj ET
+BT /F2 10 Tf 0.06 0.14 0.25 rg 453 230 Td (Member share) Tj ET
+BT /F2 10 Tf 0.06 0.14 0.25 rg 453 216 Td (reduces) Tj ET
+BT /F1 10 Tf 0.38 0.44 0.52 rg 42 112 Td (Expense split line examples: rent, bank charges, meeting expense, stationery.) Tj ET
+BT /F2 10 Tf 0.06 0.45 0.41 rg 42 92 Td (Header amount and all split line amounts must be equal before saving.) Tj ET
+endstream
+endobj
+12 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 11 0 R >>
+endobj
+13 0 obj
+<< /Length 3351 >>
+stream
+0.06 0.14 0.25 rg 0 785 595 57 re f
+0.06 0.14 0.25 RG 0.8 w 0 785 595 57 re S
+BT /F2 18 Tf 1 1 1 rg 42 815 Td (Bachat Gat SaaS) Tj ET
+BT /F1 10 Tf 0.86 0.93 0.96 rg 42 796 Td (Gain sharing rules) Tj ET
+0.93 0.99 0.96 rg 38 737 519 28 re f
+0.78 0.9 0.87 RG 0.8 w 38 737 519 28 re S
+BT /F2 13 Tf 0.06 0.45 0.41 rg 52 746 Td (Loan interest sharing) Tj ET
+0.94 0.97 1 rg 42 664 104 58 re f
+0.78 0.84 0.9 RG 0.8 w 42 664 104 58 re S
+BT /F2 12 Tf 0.06 0.45 0.41 rg 52 701 Td (1) Tj ET
+BT /F2 10 Tf 0.06 0.14 0.25 rg 72 702 Td (Loan date share) Tj ET
+BT /F2 16 Tf 0.79 0.54 0.02 rg 154 688 Td (>) Tj ET
+0.93 0.99 0.96 rg 169 664 104 58 re f
+0.78 0.84 0.9 RG 0.8 w 169 664 104 58 re S
+BT /F2 12 Tf 0.06 0.45 0.41 rg 179 701 Td (2) Tj ET
+BT /F2 10 Tf 0.06 0.14 0.25 rg 199 702 Td (Ignore new) Tj ET
+BT /F2 10 Tf 0.06 0.14 0.25 rg 199 688 Td (savings) Tj ET
+BT /F2 16 Tf 0.79 0.54 0.02 rg 281 688 Td (>) Tj ET
+0.94 0.97 1 rg 296 664 104 58 re f
+0.78 0.84 0.9 RG 0.8 w 296 664 104 58 re S
+BT /F2 12 Tf 0.06 0.45 0.41 rg 306 701 Td (3) Tj ET
+BT /F2 10 Tf 0.06 0.14 0.25 rg 326 702 Td (Reduce) Tj ET
+BT /F2 10 Tf 0.06 0.14 0.25 rg 326 688 Td (withdrawals) Tj ET
+BT /F2 16 Tf 0.79 0.54 0.02 rg 408 688 Td (>) Tj ET
+0.93 0.99 0.96 rg 423 664 104 58 re f
+0.78 0.84 0.9 RG 0.8 w 423 664 104 58 re S
+BT /F2 12 Tf 0.06 0.45 0.41 rg 433 701 Td (4) Tj ET
+BT /F2 10 Tf 0.06 0.14 0.25 rg 453 702 Td (Share interest) Tj ET
+0.94 0.97 1 rg 42 548 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 42 548 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 54 587 Td (Loan interest) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 571 Td (Shared by old share amount and how) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 559 Td (long it stayed in group.) Tj ET
+0.94 0.97 1 rg 306 548 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 306 548 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 318 587 Td (New member) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 571 Td (Member added after loan date does) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 559 Td (not get that loan interest.) Tj ET
+0.94 0.97 1 rg 42 474 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 42 474 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 54 513 Td (Extra saving) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 497 Td (Saving added after loan date is) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 485 Td (not counted for that loan.) Tj ET
+0.94 0.97 1 rg 306 474 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 306 474 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 318 513 Td (Withdrawal) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 497 Td (Withdrawal reduces old eligible) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 485 Td (share from that date.) Tj ET
+0.94 0.97 1 rg 42 400 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 42 400 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 54 439 Td (Penalty) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 423 Td (Shared equally between active) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 411 Td (members.) Tj ET
+0.94 0.97 1 rg 306 400 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 306 400 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 318 439 Td (Other income) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 423 Td (Shared equally between active) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 411 Td (members.) Tj ET
+BT /F2 10 Tf 0.06 0.45 0.41 rg 42 112 Td (Example: penalty 100 and 2 active members means 50 each.) Tj ET
+BT /F2 10 Tf 0.06 0.45 0.41 rg 42 92 Td (Example: other income 300 and 3 active members means 100 each.) Tj ET
+endstream
+endobj
+14 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 13 0 R >>
+endobj
+15 0 obj
+<< /Length 3934 >>
+stream
+0.06 0.14 0.25 rg 0 785 595 57 re f
+0.06 0.14 0.25 RG 0.8 w 0 785 595 57 re S
+BT /F2 18 Tf 1 1 1 rg 42 815 Td (Bachat Gat SaaS) Tj ET
+BT /F1 10 Tf 0.86 0.93 0.96 rg 42 796 Td (Approvals, interest and corrections) Tj ET
+0.93 0.99 0.96 rg 38 737 519 28 re f
+0.78 0.9 0.87 RG 0.8 w 38 737 519 28 re S
+BT /F2 13 Tf 0.06 0.45 0.41 rg 52 746 Td (Approval flow) Tj ET
+0.94 0.97 1 rg 42 664 104 58 re f
+0.78 0.84 0.9 RG 0.8 w 42 664 104 58 re S
+BT /F2 12 Tf 0.06 0.45 0.41 rg 52 701 Td (1) Tj ET
+BT /F2 10 Tf 0.06 0.14 0.25 rg 72 702 Td (Entry created) Tj ET
+BT /F2 16 Tf 0.79 0.54 0.02 rg 154 688 Td (>) Tj ET
+0.93 0.99 0.96 rg 169 664 104 58 re f
+0.78 0.84 0.9 RG 0.8 w 169 664 104 58 re S
+BT /F2 12 Tf 0.06 0.45 0.41 rg 179 701 Td (2) Tj ET
+BT /F2 10 Tf 0.06 0.14 0.25 rg 199 702 Td (Approval) Tj ET
+BT /F2 10 Tf 0.06 0.14 0.25 rg 199 688 Td (pending) Tj ET
+BT /F2 16 Tf 0.79 0.54 0.02 rg 281 688 Td (>) Tj ET
+0.94 0.97 1 rg 296 664 104 58 re f
+0.78 0.84 0.9 RG 0.8 w 296 664 104 58 re S
+BT /F2 12 Tf 0.06 0.45 0.41 rg 306 701 Td (3) Tj ET
+BT /F2 10 Tf 0.06 0.14 0.25 rg 326 702 Td (All approvers) Tj ET
+BT /F2 10 Tf 0.06 0.14 0.25 rg 326 688 Td (approve) Tj ET
+BT /F2 16 Tf 0.79 0.54 0.02 rg 408 688 Td (>) Tj ET
+0.93 0.99 0.96 rg 423 664 104 58 re f
+0.78 0.84 0.9 RG 0.8 w 423 664 104 58 re S
+BT /F2 12 Tf 0.06 0.45 0.41 rg 433 701 Td (4) Tj ET
+BT /F2 10 Tf 0.06 0.14 0.25 rg 453 702 Td (Dashboard) Tj ET
+BT /F2 10 Tf 0.06 0.14 0.25 rg 453 688 Td (updates) Tj ET
+1 0.98 0.92 rg 42 548 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 42 548 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 54 587 Td (Transactions) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 571 Td (If approvers exist, collection) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 559 Td (waits until approval.) Tj ET
+1 0.98 0.92 rg 306 548 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 306 548 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 318 587 Td (Loans) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 571 Td (Loan request becomes active only) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 559 Td (after approval.) Tj ET
+1 0.98 0.92 rg 42 474 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 42 474 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 54 513 Td (Migration) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 497 Td (Old data migration waits for) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 485 Td (approval if approvers exist.) Tj ET
+1 0.98 0.92 rg 306 474 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 306 474 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 318 513 Td (Corrections) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 497 Td (Adjustment/reversal waits for) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 485 Td (approval if approvers exist.) Tj ET
+1 0.98 0.92 rg 42 400 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 42 400 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 54 439 Td (Interest) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 423 Td (Interest is calculated from setup) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 411 Td (rate and payment date.) Tj ET
+1 0.98 0.92 rg 306 400 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 306 400 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 318 439 Td (Gain share) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 423 Td (Group gain is shared by member) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 411 Td (share weight and holding time.) Tj ET
+0.93 0.99 0.96 rg 38 191 519 28 re f
+0.78 0.9 0.87 RG 0.8 w 38 191 519 28 re S
+BT /F2 13 Tf 0.06 0.45 0.41 rg 52 200 Td (Wrong entry rule) Tj ET
+BT /F2 11 Tf 0.06 0.45 0.41 rg 54 146 Td (-) Tj ET
+BT /F1 10 Tf 0.06 0.14 0.25 rg 70 146 Td (Use adjustment when amount is partly wrong.) Tj ET
+BT /F2 11 Tf 0.06 0.45 0.41 rg 54 122 Td (-) Tj ET
+BT /F1 10 Tf 0.06 0.14 0.25 rg 70 122 Td (Use reversal when whole entry is wrong.) Tj ET
+BT /F2 11 Tf 0.06 0.45 0.41 rg 54 98 Td (-) Tj ET
+BT /F1 10 Tf 0.06 0.14 0.25 rg 70 98 Td (Approved original record is never edited directly.) Tj ET
+BT /F2 11 Tf 0.06 0.45 0.41 rg 54 74 Td (-) Tj ET
+BT /F1 10 Tf 0.06 0.14 0.25 rg 70 74 Td (Audit history keeps who changed what and when.) Tj ET
+endstream
+endobj
+16 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 15 0 R >>
+endobj
+17 0 obj
+<< /Length 2905 >>
+stream
+0.06 0.14 0.25 rg 0 785 595 57 re f
+0.06 0.14 0.25 RG 0.8 w 0 785 595 57 re S
+BT /F2 18 Tf 1 1 1 rg 42 815 Td (Bachat Gat SaaS) Tj ET
+BT /F1 10 Tf 0.86 0.93 0.96 rg 42 796 Td (Screen guide) Tj ET
+0.93 0.99 0.96 rg 38 737 519 28 re f
+0.78 0.9 0.87 RG 0.8 w 38 737 519 28 re S
+BT /F2 13 Tf 0.06 0.45 0.41 rg 52 746 Td (Common screens) Tj ET
+0.93 0.99 0.96 rg 42 650 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 42 650 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 54 689 Td (Dashboard) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 673 Td (Shows this month collection,) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 661 Td (savings, loans and balance.) Tj ET
+0.93 0.99 0.96 rg 306 650 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 306 650 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 318 689 Td (Transactions) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 673 Td (Use for savings, repayments,) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 661 Td (penalty and group expense.) Tj ET
+0.93 0.99 0.96 rg 42 576 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 42 576 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 54 615 Td (Loans) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 599 Td (Member requests loan.) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 587 Td (Admin/approver approves before) Tj ET
+0.93 0.99 0.96 rg 306 576 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 306 576 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 318 615 Td (Approvals) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 599 Td (Approve or reject pending work) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 587 Td (assigned to you.) Tj ET
+0.93 0.99 0.96 rg 42 502 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 42 502 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 54 541 Td (Reports & Audit) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 525 Td (Download reports and see full) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 513 Td (history.) Tj ET
+0.93 0.99 0.96 rg 306 502 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 306 502 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 318 541 Td (Contact) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 525 Td (Raise issue and chat with support.) Tj ET
+0.93 0.99 0.96 rg 38 271 519 28 re f
+0.78 0.9 0.87 RG 0.8 w 38 271 519 28 re S
+BT /F2 13 Tf 0.06 0.45 0.41 rg 52 280 Td (Remember) Tj ET
+BT /F2 11 Tf 0.06 0.45 0.41 rg 54 226 Td (-) Tj ET
+BT /F1 10 Tf 0.06 0.14 0.25 rg 70 226 Td (Do not delete approved money entries.) Tj ET
+BT /F2 11 Tf 0.06 0.45 0.41 rg 54 202 Td (-) Tj ET
+BT /F1 10 Tf 0.06 0.14 0.25 rg 70 202 Td (Use adjustment for small correction.) Tj ET
+BT /F2 11 Tf 0.06 0.45 0.41 rg 54 178 Td (-) Tj ET
+BT /F1 10 Tf 0.06 0.14 0.25 rg 70 178 Td (Use reversal when full entry is wrong.) Tj ET
+BT /F2 11 Tf 0.06 0.45 0.41 rg 54 154 Td (-) Tj ET
+BT /F1 10 Tf 0.06 0.14 0.25 rg 70 154 Td (Only completed entries show in dashboard.) Tj ET
+BT /F2 11 Tf 0.06 0.45 0.41 rg 54 130 Td (-) Tj ET
+BT /F1 10 Tf 0.06 0.14 0.25 rg 70 130 Td (Open the correct period before posting.) Tj ET
+BT /F2 12 Tf 0.06 0.45 0.41 rg 42 58 Td (End of guide) Tj ET
+endstream
+endobj
+18 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 17 0 R >>
+endobj
+19 0 obj
+<< /Length 3707 >>
+stream
+0.06 0.14 0.25 rg 0 785 595 57 re f
+0.06 0.14 0.25 RG 0.8 w 0 785 595 57 re S
+BT /F2 18 Tf 1 1 1 rg 42 815 Td (Bachat Gat SaaS) Tj ET
+BT /F1 10 Tf 0.86 0.93 0.96 rg 42 796 Td (Formula guide) Tj ET
+0.93 0.99 0.96 rg 38 737 519 28 re f
+0.78 0.9 0.87 RG 0.8 w 38 737 519 28 re S
+BT /F2 13 Tf 0.06 0.45 0.41 rg 52 746 Td (Dashboard and backend formulas) Tj ET
+0.94 0.97 1 rg 42 650 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 42 650 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 54 689 Td (Total savings) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 673 Td (Completed savings + excess savings) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 661 Td (+ migrated savings + corrections.) Tj ET
+0.94 0.97 1 rg 306 650 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 306 650 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 318 689 Td (This month collection) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 673 Td (Savings + principal + interest +) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 661 Td (penalty + migrated/corrections.) Tj ET
+0.94 0.97 1 rg 42 576 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 42 576 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 54 615 Td (Remaining balance) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 599 Td (Collections + migration - loans -) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 587 Td (withdrawals - expenses.) Tj ET
+0.94 0.97 1 rg 306 576 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 306 576 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 318 615 Td (Group gain) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 599 Td (Interest + penalty + other income.) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 587 Td (Waiver is not gain.) Tj ET
+0.94 0.97 1 rg 42 502 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 42 502 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 54 541 Td (Member share) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 525 Td (Savings + gain - expense -) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 513 Td (outstanding loan/interest/penalty.) Tj ET
+0.94 0.97 1 rg 306 502 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 306 502 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 318 541 Td (Saving split) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 525 Td (Only unpaid saving for the month) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 513 Td (is collected as saving.) Tj ET
+0.94 0.97 1 rg 42 428 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 42 428 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 54 467 Td (Loan interest) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 451 Td (Principal x monthly rate x days /) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 439 Td (30 / 100.) Tj ET
+0.94 0.97 1 rg 306 428 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 306 428 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 318 467 Td (Loan eligibility) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 451 Td (Minimum of account balance and) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 439 Td (member/group loan limit.) Tj ET
+0.93 0.99 0.96 rg 38 265 519 28 re f
+0.78 0.9 0.87 RG 0.8 w 38 265 519 28 re S
+BT /F2 13 Tf 0.06 0.45 0.41 rg 52 274 Td (Distribution formulas) Tj ET
+BT /F2 11 Tf 0.06 0.45 0.41 rg 54 220 Td (-) Tj ET
+BT /F1 10 Tf 0.06 0.14 0.25 rg 70 220 Td (Loan interest share = interest x member capital-time weight / total weight.) Tj ET
+BT /F2 11 Tf 0.06 0.45 0.41 rg 54 196 Td (-) Tj ET
+BT /F1 10 Tf 0.06 0.14 0.25 rg 70 196 Td (Penalty share = penalty amount / active members.) Tj ET
+BT /F2 11 Tf 0.06 0.45 0.41 rg 54 172 Td (-) Tj ET
+BT /F1 10 Tf 0.06 0.14 0.25 rg 70 172 Td (Other income share = other income / active members.) Tj ET
+BT /F2 11 Tf 0.06 0.45 0.41 rg 54 148 Td (-) Tj ET
+BT /F1 10 Tf 0.06 0.14 0.25 rg 70 148 Td (Member setup is used first. If blank or zero, group setup is used.) Tj ET
+BT /F2 11 Tf 0.06 0.45 0.41 rg 54 124 Td (-) Tj ET
+BT /F1 10 Tf 0.06 0.14 0.25 rg 70 124 Td (Waived interest reduces receivable amount. It is not distributed.) Tj ET
+endstream
+endobj
+20 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 19 0 R >>
+endobj
+21 0 obj
+<< /Length 2135 >>
+stream
+0.06 0.14 0.25 rg 0 785 595 57 re f
+0.06 0.14 0.25 RG 0.8 w 0 785 595 57 re S
+BT /F2 18 Tf 1 1 1 rg 42 815 Td (Bachat Gat SaaS) Tj ET
+BT /F1 10 Tf 0.86 0.93 0.96 rg 42 796 Td (Reconciliation guide) Tj ET
+0.93 0.99 0.96 rg 38 737 519 28 re f
+0.78 0.9 0.87 RG 0.8 w 38 737 519 28 re S
+BT /F2 13 Tf 0.06 0.45 0.41 rg 52 746 Td (End of day or month checks) Tj ET
+1 0.98 0.92 rg 42 650 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 42 650 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 54 689 Td (Group balance) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 673 Td (Opening + collections + gain -) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 661 Td (loans - withdrawals - expenses =) Tj ET
+1 0.98 0.92 rg 306 650 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 306 650 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 318 689 Td (Member share) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 673 Td (Opening share + saving + gain -) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 661 Td (withdrawal - expense - loan due =) Tj ET
+1 0.98 0.92 rg 42 576 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 42 576 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 54 615 Td (Transaction check) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 599 Td (Header amount must equal all split) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 587 Td (lines.) Tj ET
+1 0.98 0.92 rg 306 576 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 306 576 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 318 615 Td (Expense check) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 599 Td (Expense header must equal category) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 587 Td (line total.) Tj ET
+1 0.98 0.92 rg 42 502 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 42 502 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 54 541 Td (Loan check) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 525 Td (Opening loan + disbursement +) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 54 513 Td (charges - repayments - waiver =) Tj ET
+1 0.98 0.92 rg 306 502 247 62 re f
+0.78 0.84 0.9 RG 0.8 w 306 502 247 62 re S
+BT /F2 10.5 Tf 0.06 0.14 0.25 rg 318 541 Td (Approval check) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 525 Td (Pending entries do not affect) Tj ET
+BT /F1 9 Tf 0.38 0.44 0.52 rg 318 513 Td (dashboards until completed.) Tj ET
+endstream
+endobj
+22 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 21 0 R >>
+endobj
+xref
+0 23
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000170 00000 n 
+0000000240 00000 n 
+0000000315 00000 n 
+0000005802 00000 n 
+0000005938 00000 n 
+0000009093 00000 n 
+0000009229 00000 n 
+0000013155 00000 n 
+0000013292 00000 n 
+0000017901 00000 n 
+0000018039 00000 n 
+0000021443 00000 n 
+0000021581 00000 n 
+0000025568 00000 n 
+0000025706 00000 n 
+0000028664 00000 n 
+0000028802 00000 n 
+0000032562 00000 n 
+0000032700 00000 n 
+0000034888 00000 n 
+trailer
+<< /Size 23 /Root 1 0 R >>
+startxref
+35026
+%%EOF
