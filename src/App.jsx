@@ -2974,6 +2974,25 @@ function addMonths(date, months) {
   return next;
 }
 
+function loadRazorpayCheckout() {
+  if (typeof window === "undefined") return Promise.reject(new Error("Razorpay checkout is available only in the browser."));
+  if (window.Razorpay) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]');
+    if (existing) {
+      existing.addEventListener("load", resolve, { once: true });
+      existing.addEventListener("error", () => reject(new Error("Unable to load Razorpay checkout.")), { once: true });
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    script.onload = resolve;
+    script.onerror = () => reject(new Error("Unable to load Razorpay checkout."));
+    document.body.appendChild(script);
+  });
+}
+
 function monthKey(value) {
   if (!value) return "Unknown";
   const date = new Date(value);
@@ -3022,50 +3041,115 @@ function getGroupPlan(state, groupId) {
 function Subscriptions({ state, setState, actor, selectedGroup, setConfirmDialog, setNotification }) {
   const currentSubscription = state.subscriptions.find((subscription) => !subscription.groupId || String(subscription.groupId) === String(selectedGroup?.id));
   const activePlan = getGroupPlan(state, selectedGroup?.id);
+  const [paymentPlanId, setPaymentPlanId] = useState("");
 
   function subscribe(plan) {
     if (plan.id === "free") {
       setNotification({ type: "info", message: "Free plan is active by default for 1 group and 5 members." });
       return;
     }
+    if (!selectedGroup?.id) {
+      setNotification({ type: "error", message: "Create/select a group before buying a plan." });
+      return;
+    }
+    if (!repository.isConfigured()) {
+      setNotification({ type: "error", message: "Supabase must be configured before Razorpay payments can be used." });
+      return;
+    }
+    if (!import.meta.env.VITE_RAZORPAY_KEY_ID) {
+      setNotification({ type: "error", message: "Add VITE_RAZORPAY_KEY_ID in .env.local before taking payments." });
+      return;
+    }
     setConfirmDialog({
       title: `Subscribe to ${plan.name}`,
-      message: `Proceed with ${plan.duration.toLowerCase()} payment of ${currency.format(plan.amount)} per group? Razorpay integration will use your live keys once configured.`,
-      onConfirm: () => {
-        const today = new Date();
-        const subscription = {
-          id: makeId("sub"),
-          groupId: selectedGroup?.id,
-          groupName: selectedGroup?.name ?? state.groups[0]?.name ?? "Current group",
-          plan: plan.name,
-          duration: plan.duration,
-          status: "Active",
-          amount: plan.amount,
-          renewalDate: addMonths(today, plan.duration === "Yearly" ? 12 : 1).toISOString().slice(0, 10),
-          paymentStatus: "Paid",
-          paymentProvider: "Dummy Razorpay",
-          transactionReference: `DUMMY-RZP-${Date.now()}`,
-          maxMembers: plan.maxMembers,
-          features: plan.features
-        };
-
-        setState((current) => audit({
-          state: {
-            ...current,
-            subscriptions: [
-              subscription,
-              ...(current.subscriptions || []).filter((item) => String(item.groupId) !== String(selectedGroup?.id))
-            ]
-          },
-          actor,
-          action: "subscribe",
-          tableName: "group_subscriptions",
-          recordId: subscription.id,
-          newValue: subscription
-        }));
+      message: `Proceed with ${plan.duration.toLowerCase()} payment of ${currency.format(plan.amount)} per group using Razorpay?`,
+      onConfirm: async () => {
         setConfirmDialog(null);
-        setNotification({ type: "success", message: `${plan.name} ${plan.duration} subscription activated with dummy payment reference ${subscription.transactionReference}.` });
-        setTimeout(() => setNotification(null), 5000);
+        setPaymentPlanId(plan.id);
+        try {
+          await loadRazorpayCheckout();
+          const orderResult = await repository.createRazorpayOrder({
+            groupId: selectedGroup.id,
+            planName: plan.name,
+            duration: plan.duration
+          });
+          const order = orderResult.order;
+          if (!order?.id) throw new Error("Razorpay order was not created.");
+
+          const checkoutResult = await new Promise((resolve, reject) => {
+            const razorpay = new window.Razorpay({
+              key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+              amount: order.amount,
+              currency: order.currency ?? "INR",
+              name: "Bachat Gat SaaS",
+              description: `${plan.name} ${plan.duration} plan`,
+              order_id: order.id,
+              prefill: {
+                name: actor?.name ?? "",
+                email: actor?.email ?? "",
+                contact: actor?.mobile ?? ""
+              },
+              notes: {
+                group_id: String(selectedGroup.id),
+                plan_name: plan.name,
+                duration: plan.duration
+              },
+              theme: { color: "#0f766e" },
+              handler: resolve,
+              modal: {
+                ondismiss: () => reject(new Error("Payment cancelled."))
+              }
+            });
+            razorpay.open();
+          });
+
+          const verification = await repository.verifyRazorpayPayment({
+            groupId: selectedGroup.id,
+            planName: plan.name,
+            duration: plan.duration,
+            ...checkoutResult
+          });
+          const verifiedPlan = verification.plan ?? plan;
+          const verifiedSubscription = verification.subscription ?? {};
+          const subscription = {
+            id: verifiedSubscription.group_subscription_id ?? makeId("sub"),
+            groupId: selectedGroup.id,
+            groupName: selectedGroup.name ?? state.groups[0]?.name ?? "Current group",
+            plan: verifiedPlan.name ?? plan.name,
+            duration: verifiedPlan.duration ?? plan.duration,
+            status: "Active",
+            amount: Number(verifiedPlan.amount ?? plan.amount),
+            startDate: verifiedSubscription.start_date,
+            endDate: verifiedSubscription.end_date,
+            renewalDate: verifiedSubscription.end_date ?? addMonths(new Date(), plan.duration === "Yearly" ? 12 : 1).toISOString().slice(0, 10),
+            paymentStatus: "Paid",
+            paymentProvider: "Razorpay",
+            transactionReference: verifiedSubscription.transaction_reference ?? checkoutResult.razorpay_payment_id,
+            maxMembers: Number(verifiedPlan.maxMembers ?? plan.maxMembers),
+            features: verifiedPlan.features ?? plan.features
+          };
+
+          setState((current) => audit({
+            state: {
+              ...current,
+              subscriptions: [
+                subscription,
+                ...(current.subscriptions || []).filter((item) => String(item.groupId) !== String(selectedGroup.id))
+              ]
+            },
+            actor,
+            action: "subscribe",
+            tableName: "group_subscriptions",
+            recordId: subscription.id,
+            newValue: subscription
+          }));
+          setNotification({ type: "success", message: `${subscription.plan} ${subscription.duration} subscription activated. Razorpay payment ${checkoutResult.razorpay_payment_id} verified.` });
+          setTimeout(() => setNotification(null), 6000);
+        } catch (error) {
+          setNotification({ type: "error", message: `Unable to complete Razorpay payment: ${error.message}`, details: serializeError(error) });
+        } finally {
+          setPaymentPlanId("");
+        }
       },
       onCancel: () => {
         setConfirmDialog(null);
@@ -3076,7 +3160,7 @@ function Subscriptions({ state, setState, actor, selectedGroup, setConfirmDialog
   }
 
   return (
-    <Page title="Subscriptions" subtitle="Choose a plan and complete dummy payment. Razorpay integration can be connected later." action={null}>
+    <Page title="Subscriptions" subtitle="Choose a plan and complete one-time Razorpay payment" action={null}>
       {!currentSubscription && (
         <Section title="Current plan">
           <div className="status-row">
@@ -3109,8 +3193,8 @@ function Subscriptions({ state, setState, actor, selectedGroup, setConfirmDialog
             <div className="tag-list">
               {plan.features.map((feature) => <span key={feature}>{feature}</span>)}
             </div>
-            <button type="button" className="primary-button" onClick={() => subscribe(plan)}>
-              {plan.amount === 0 ? "Current Free Plan" : "Pay & Subscribe"}
+            <button type="button" className="primary-button" onClick={() => subscribe(plan)} disabled={Boolean(paymentPlanId)}>
+              {paymentPlanId === plan.id ? "Opening Razorpay..." : plan.amount === 0 ? "Current Free Plan" : "Pay & Subscribe"}
             </button>
           </article>
         ))}

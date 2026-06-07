@@ -334,12 +334,15 @@ function mapSubscription(row, plan) {
     groupId: row.group_id,
     groupName: row.groups?.group_name,
     plan: plan?.plan_name ?? "Starter",
+    duration: plan?.duration ?? "",
     status: row.payment_status,
     amount: Number(plan?.amount ?? 0),
     startDate: row.start_date,
     endDate: row.end_date,
     renewsOn: row.end_date,
     renewalDate: row.end_date,
+    paymentStatus: row.payment_status,
+    paymentProvider: "Razorpay",
     transactionReference: row.transaction_reference,
     maxMembers: plan?.max_members ?? 50,
     features: String(plan?.features ?? "").split(",").filter(Boolean)
@@ -1325,6 +1328,26 @@ export const repository = {
       .select()
       .single();
     if (error) throw error;
+    return data;
+  },
+
+  async createRazorpayOrder({ groupId, planName, duration }) {
+    const client = requireClient();
+    const { data, error } = await client.functions.invoke("create-razorpay-order", {
+      body: { groupId, planName, duration }
+    });
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+    return data;
+  },
+
+  async verifyRazorpayPayment(payload) {
+    const client = requireClient();
+    const { data, error } = await client.functions.invoke("verify-razorpay-payment", {
+      body: payload
+    });
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
     return data;
   },
 
