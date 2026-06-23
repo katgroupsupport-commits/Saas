@@ -2158,3 +2158,113 @@ td {
     grid-template-columns: 1fr;
   }
 }
+
+/* Contrast repair for older light UI blocks after dark premium theme */
+.public-shell,
+.auth-page {
+  background:
+    radial-gradient(circle at top left, rgba(169, 182, 238, 0.12), transparent 34rem),
+    var(--bg);
+}
+
+.public-nav {
+  background: rgba(29, 26, 38, 0.94);
+  border-color: rgba(196, 197, 238, 0.16);
+}
+
+.public-nav a,
+.public-footer a,
+.public-brand {
+  color: #f8fafc;
+}
+
+.public-hero,
+.guide-step,
+.guide-screen,
+.guide-formula,
+.guide-setup-notes span,
+.period-control-panel,
+.allocation div,
+.button-row button,
+.setup-nav-button,
+.setup-submenu,
+.setup-submenu-button,
+.report-list button {
+  background: #211f2b;
+  color: #f8fafc;
+  border-color: rgba(196, 197, 238, 0.2);
+}
+
+.guide-step,
+.guide-screen,
+.guide-formula {
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.24);
+}
+
+.guide-step strong,
+.guide-step p,
+.guide-step div,
+.guide-screen strong,
+.guide-formula strong,
+.setup-nav-button strong,
+.setup-submenu-button strong,
+.report-list button span,
+.button-row button {
+  color: #f8fafc;
+}
+
+.guide-screen p,
+.guide-formula p,
+.guide-setup-notes span,
+.public-hero p,
+.setup-nav-button small,
+.setup-submenu-button small {
+  color: #c9c4d6;
+}
+
+.guide-step span {
+  background: var(--brand);
+  color: #15131d;
+}
+
+.guide-step:not(:last-child)::after {
+  color: var(--brand);
+}
+
+.guide-screen-top {
+  background: #10233f;
+  border-color: rgba(196, 197, 238, 0.24);
+}
+
+.setup-nav-button.active,
+.setup-submenu-button.active {
+  background: rgba(169, 182, 238, 0.16);
+  border-color: rgba(169, 182, 238, 0.48);
+  box-shadow: inset 3px 0 0 var(--brand);
+}
+
+.tag-list span,
+.pill {
+  background: rgba(169, 182, 238, 0.16);
+  color: #dce2ff;
+}
+
+button:disabled,
+.primary-button:disabled,
+.secondary-button:disabled {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(196, 197, 238, 0.18);
+  color: #b9b5c7;
+}
+
+.auth-panel button:disabled {
+  background: rgba(255, 255, 255, 0.1);
+  color: #c9c4d6;
+}
+
+.field input:disabled,
+.field select:disabled {
+  background: rgba(255, 255, 255, 0.06);
+  color: #b9b5c7;
+}
