@@ -1,0 +1,581 @@
+import {
+  calculateLoanInterest,
+  calculateTotalSavings
+} from "./calculationEngine";
+import { getCurrentMonthPeriod, getOpenPeriod } from "./periodControl";
+
+export const financeFieldDictionary = {
+  group: {
+    totalSavings: {
+      label: "Total savings",
+      formula: "Completed savings + excess movements, including migrated savings/opening member savings, less withdrawals where represented in transactions."
+    },
+    monthlyCollections: {
+      label: "Collected in period",
+      formula: "Period savings + principal collected + interest collected + penalty collected - withdrawals."
+    },
+    totalActiveLoan: {
+      label: "Active loan amount",
+      formula: "Sum of derived principal outstanding for active loans. Migrated principal is opening outstanding, not collected."
+    },
+    remainingBalance: {
+      label: "Remaining balance",
+      formula: "Total savings + collected/legacy group gain - active loan outstanding - group expenses."
+    },
+    groupGain: {
+      label: "Group gain",
+      formula: "Non-migrated collected interest + non-migrated collected penalty + legacy group gain."
+    },
+    totalExpenses: {
+      label: "Group expenses",
+      formula: "Completed group expenses + migrated opening group expense."
+    }
+  },
+  member: {
+    savings: {
+      label: "Savings",
+      formula: "Member completed savings + excess, including migrated saving; falls back to stored member savings if no transaction ledger exists."
+    },
+    monthlyCollections: {
+      label: "Collected this month",
+      formula: "Member period savings + principal + interest + penalty - withdrawals."
+    },
+    shareAmount: {
+      label: "Share amount",
+      formula: "Savings + member group gain share - member group expense share."
+    },
+    outstanding: {
+      label: "Loan balance",
+      formula: "Derived principal outstanding + opening interest outstanding + opening penalty outstanding for active member loans."
+    },
+    nextDueAmount: {
+      label: "Next minimum due",
+      formula: "Saving due + interest due + penalty due."
+    },
+    sharePercent: {
+      label: "Share percentage",
+      formula: "Member positive share amount / all members positive share amount."
+    }
+  },
+  allocation: {
+    savings: "Regular/member saving collected.",
+    interest: "Interest actually collected; migrated interest remains opening due.",
+    penalty: "Penalty actually collected; migrated penalty remains opening due.",
+    principal: "Principal actually repaid; migrated principal remains opening loan outstanding.",
+    excess: "Extra amount beyond current dues, treated with member savings/share."
+  }
+};
+
+export function toIsoDateValue(date = new Date()) {
+  const value = date instanceof Date ? date : new Date(date);
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+export function isCompletedFinancialStatus(status) {
+  return ["COMPLETED", "APPROVED"].includes(String(status ?? "").toUpperCase());
+}
+
+export function getCompletedTransactions(transactions = []) {
+  return transactions.filter((transaction) => isCompletedFinancialStatus(transaction.approvalStatus));
+}
+
+export function loanBelongsToMember(loan, member) {
+  if (!loan || !member) return false;
+  return loan.memberId === member.id || loan.memberName === member.fullName;
+}
+
+export function isOutstandingLoan(loan) {
+  return loan
+    && (loan.principalOutstanding || 0) > 0
+    && (
+      isCompletedFinancialStatus(loan.approvalStatus)
+      || ["ACTIVE", "COMPLETED", "APPROVED"].includes(String(loan.status ?? loan.loanStatus ?? "").toUpperCase())
+    );
+}
+
+export function isMigratedOpeningTransaction(transaction) {
+  return transaction?.transactionType === "Migrated";
+}
+
+function getOpeningNumber(row, snakeKey, camelKey) {
+  return Number(row?.[snakeKey] ?? row?.[camelKey] ?? 0);
+}
+
+function getCompletedLegacyGroupOpenings(state) {
+  return (state.legacyGroupOpenings || []).filter((row) =>
+    isCompletedFinancialStatus(row.approval_status ?? row.approvalStatus)
+  );
+}
+
+export function sumCollectedAllocation(transactions = [], bucket) {
+  return transactions.reduce((sum, transaction) => {
+    if (isMigratedOpeningTransaction(transaction) && !["savings", "excess"].includes(bucket)) {
+      return sum;
+    }
+    return sum + Number(transaction.allocation?.[bucket] || 0);
+  }, 0);
+}
+
+export function sumCollectedSavings(transactions = []) {
+  return transactions.reduce((sum, transaction) => {
+    if (isMigratedOpeningTransaction(transaction) || transaction.transactionType === "Withdrawal") return sum;
+    return sum + Number(transaction.allocation?.savings || 0) + Number(transaction.allocation?.excess || 0);
+  }, 0);
+}
+
+export function calculateLegacyGroupOpeningSummary(state, { totalSavings = 0, activeLoanOutstanding = 0 } = {}) {
+  const rows = getCompletedLegacyGroupOpenings(state);
+  const openingBankBalance = rows.reduce((sum, row) => sum + getOpeningNumber(row, "opening_bank_balance", "openingBankBalance"), 0);
+  const openingGroupExpense = rows.reduce((sum, row) => sum + getOpeningNumber(row, "opening_group_expense", "openingGroupExpense"), 0);
+  const explicitGroupGain = rows.reduce((sum, row) => sum + getOpeningNumber(row, "opening_group_gain", "openingGroupGain"), 0);
+  const derivedGroupGain = Math.max(0, openingBankBalance + Number(activeLoanOutstanding || 0) + openingGroupExpense - Number(totalSavings || 0));
+
+  return {
+    openingBankBalance,
+    openingGroupExpense,
+    explicitGroupGain,
+    derivedGroupGain,
+    groupGain: explicitGroupGain + derivedGroupGain
+  };
+}
+
+export function calculateGroupFinanceSummary(state, period = getDashboardPeriod(state)) {
+  const completedTransactions = getCompletedTransactions(state.transactions || []);
+  const completedExpenses = getCompletedTransactions(state.expenses || []);
+  const activeLoans = (state.loans || []).filter(isOutstandingLoan);
+  const completedLoans = (state.loans || []).filter((loan) =>
+    isCompletedFinancialStatus(loan.approvalStatus)
+    || ["ACTIVE", "COMPLETED", "APPROVED", "CLOSED"].includes(String(loan.status ?? loan.loanStatus ?? "").toUpperCase())
+  );
+  const totalSavings = calculateTotalSavings(completedTransactions, state.members || []);
+  const totalActiveLoan = calculateDerivedLoanOutstanding(activeLoans, state);
+  const legacyOpening = calculateLegacyGroupOpeningSummary(state, { totalSavings, activeLoanOutstanding: totalActiveLoan });
+  const totalExpenses = completedExpenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0) + legacyOpening.openingGroupExpense;
+  const collectedGain = completedTransactions.reduce((sum, trx) =>
+    isMigratedOpeningTransaction(trx) ? sum : sum + Number(trx.allocation?.interest || 0) + Number(trx.allocation?.penalty || 0), 0);
+  const groupGain = collectedGain + legacyOpening.groupGain;
+  const remainingBalance = Number(totalSavings || 0) + Number(groupGain || 0) - Number(totalActiveLoan || 0) - Number(totalExpenses || 0);
+  const periodTransactions = completedTransactions.filter((item) => isDateInPeriod(item.transactionDate, period));
+  const monthlyWithdrawn = periodTransactions
+    .filter((trx) => trx.transactionType === "Withdrawal")
+    .reduce((sum, trx) => sum + Math.abs(Number(trx.amount || trx.allocation?.savings || 0)), 0);
+  const totalWithdrawn = completedTransactions
+    .filter((trx) => trx.transactionType === "Withdrawal")
+    .reduce((sum, trx) => sum + Math.abs(Number(trx.amount || trx.allocation?.savings || 0)), 0);
+  const monthlySavings = sumCollectedSavings(periodTransactions);
+  const monthlyPrincipal = sumCollectedAllocation(periodTransactions, "principal");
+  const monthlyInterest = sumCollectedAllocation(periodTransactions, "interest");
+  const monthlyPenalty = sumCollectedAllocation(periodTransactions, "penalty");
+  const monthlyCollections = monthlySavings + monthlyPrincipal + monthlyInterest + monthlyPenalty - monthlyWithdrawn;
+  const monthlyLoanDisbursed = completedLoans
+    .filter((loan) => isDateInPeriod(loan.startDate, period))
+    .reduce((sum, loan) => sum + Number(loan.amount || 0), 0);
+
+  return {
+    completedTransactions,
+    completedExpenses,
+    activeLoans,
+    completedLoans,
+    totalSavings,
+    totalActiveLoan,
+    totalExpenses,
+    totalWithdrawn,
+    groupGain,
+    collectedGain,
+    legacyOpening,
+    remainingBalance,
+    monthlySavings,
+    monthlyPrincipal,
+    monthlyInterest,
+    monthlyPenalty,
+    monthlyWithdrawn,
+    monthlyCollections,
+    monthlyLoanDisbursed,
+    overallPrincipalCollected: sumCollectedAllocation(completedTransactions, "principal"),
+    totalLoanDisbursedAmount: completedLoans.reduce((sum, loan) => sum + Number(loan.amount || 0), 0),
+    totalLoanDisbursedCount: completedLoans.length,
+    closedLoanCount: completedLoans.filter((loan) => !isOutstandingLoan(loan)).length,
+    activatedThisMonth: completedLoans.filter((loan) => isDateInPeriod(loan.startDate, period)).length
+  };
+}
+
+export function calculateMemberFinanceSummary(member, state, period = getDashboardPeriod(state), actor = null) {
+  const groupSummary = calculateGroupFinanceSummary(state, period);
+  const ledger = calculateMemberLedgerSummary(member, state);
+  const memberLoans = groupSummary.completedLoans.filter((loan) => loanBelongsToMember(loan, member));
+  const memberActiveLoans = memberLoans.filter(isOutstandingLoan);
+  const dueRows = calculatePendingDues(state, actor, false).filter((row) => String(row.memberId) === String(member?.id));
+  const dueDate = getLoanDueDate(state.groups?.[0]);
+  const interestDue = dueRows.reduce((sum, row) => sum + Number(row.interestDue || 0), 0) || calculateMemberLoanInterestDue(member, state, dueDate);
+  const nextDueAmount = dueRows.reduce((sum, row) => sum + Number(row.totalDue || 0), 0);
+  const completedTransactions = groupSummary.completedTransactions;
+  const memberTransactions = completedTransactions.filter((trx) => String(trx.memberId) === String(member?.id));
+  const memberPeriodTransactions = memberTransactions.filter((trx) => isDateInPeriod(trx.transactionDate, period));
+  const monthlyWithdrawn = memberPeriodTransactions
+    .filter((trx) => trx.transactionType === "Withdrawal")
+    .reduce((sum, trx) => sum + Math.abs(Number(trx.amount || trx.allocation?.savings || 0)), 0);
+  const monthlySavings = sumCollectedSavings(memberPeriodTransactions);
+  const monthlyPrincipal = sumCollectedAllocation(memberPeriodTransactions, "principal");
+  const monthlyInterest = sumCollectedAllocation(memberPeriodTransactions, "interest");
+  const monthlyPenalty = sumCollectedAllocation(memberPeriodTransactions, "penalty");
+  const totalGroupShare = (state.members || []).reduce((sum, item) => sum + Math.max(0, calculateMemberLedgerSummary(item, state).shareAmount), 0);
+  const sharePercent = totalGroupShare > 0 ? Number(((Math.max(0, ledger.shareAmount) / totalGroupShare) * 100).toFixed(2)) : 0;
+
+  return {
+    ...ledger,
+    memberLoans,
+    memberActiveLoans,
+    dueRows,
+    dueDate,
+    interestDue,
+    nextDueAmount,
+    monthlySavings,
+    monthlyPrincipal,
+    monthlyInterest,
+    monthlyPenalty,
+    monthlyWithdrawn,
+    monthlyCollections: monthlySavings + monthlyPrincipal + monthlyInterest + monthlyPenalty - monthlyWithdrawn,
+    sharePercent
+  };
+}
+
+export function calculateOpeningShareRows(state, amount) {
+  const activeMembers = (state.members || []).filter((member) => member.status !== "Inactive");
+  const totalSavings = activeMembers.reduce((sum, member) => sum + Math.max(0, Number(member.savings || 0)), 0);
+  let remaining = Number(amount || 0);
+
+  return activeMembers.map((member, index) => {
+    const shareAmount = totalSavings > 0
+      ? (index === activeMembers.length - 1 ? Number(remaining.toFixed(2)) : Number(((Number(amount || 0) * Math.max(0, Number(member.savings || 0))) / totalSavings).toFixed(2)))
+      : (index === activeMembers.length - 1 ? Number(remaining.toFixed(2)) : Number((Number(amount || 0) / Math.max(1, activeMembers.length)).toFixed(2)));
+    remaining -= shareAmount;
+    return { memberId: member.id, shareAmount };
+  });
+}
+
+export function calculateLegacyGroupOpeningMemberImpact(member, state) {
+  const openingSummary = calculateLegacyGroupOpeningSummary(state, {
+    totalSavings: calculateTotalSavings(getCompletedTransactions(state.transactions || []), state.members || []),
+    activeLoanOutstanding: calculateDerivedLoanOutstanding(state.loans || [], state)
+  });
+  const gainRows = calculateOpeningShareRows(state, openingSummary.groupGain);
+  const expenseRows = calculateOpeningShareRows(state, openingSummary.openingGroupExpense);
+  const gain = gainRows.find((row) => String(row.memberId) === String(member?.id))?.shareAmount ?? 0;
+  const expense = expenseRows.find((row) => String(row.memberId) === String(member?.id))?.shareAmount ?? 0;
+  return { gain, expense };
+}
+
+export function calculateMemberLedgerSummary(member, state) {
+  const completedTransactions = getCompletedTransactions(state.transactions || []);
+  const memberTransactions = completedTransactions.filter((transaction) => String(transaction.memberId) === String(member?.id));
+  let savings = memberTransactions
+    .filter((transaction) => transaction.transactionType !== "Group Expense Share")
+    .reduce((sum, transaction) =>
+      sum + Number(transaction.allocation?.savings ?? 0) + Number(transaction.allocation?.excess ?? 0), 0);
+  if (savings === 0 && Number(member?.savings || 0) > 0) {
+    savings = Number(member.savings || 0);
+  }
+  const expense = Math.abs(memberTransactions
+    .filter((transaction) => transaction.transactionType === "Group Expense Share")
+    .reduce((sum, transaction) => sum + Number(transaction.allocation?.savings ?? transaction.amount ?? 0), 0));
+  const withdrawn = Math.abs(memberTransactions
+    .filter((transaction) => transaction.transactionType === "Withdrawal")
+    .reduce((sum, transaction) => sum + Number(transaction.allocation?.savings ?? -Math.abs(transaction.amount ?? 0)), 0));
+  const openingImpact = calculateLegacyGroupOpeningMemberImpact(member, state);
+  const gain = Number(member?.earnedFromGroup ?? member?.groupGain ?? 0) + Number(openingImpact.gain || 0);
+  const totalExpense = expense + Number(openingImpact.expense || 0);
+  const loanOutstanding = (state.loans || [])
+    .filter((loan) => loanBelongsToMember(loan, member) && isOutstandingLoan(loan))
+    .reduce((sum, loan) => sum
+      + calculateDerivedLoanPrincipalOutstanding(loan, state)
+      + Number(loan.interestOutstanding || 0)
+      + Number(loan.penaltyOutstanding || 0), 0);
+  const outstanding = loanOutstanding || Number(member?.loanOutstanding || 0)
+    + Number(member?.interestOutstanding || 0)
+    + Number(member?.penaltyOutstanding || 0);
+  return {
+    savings,
+    expense: totalExpense,
+    withdrawn,
+    gain,
+    shareAmount: savings + gain - totalExpense,
+    outstanding
+  };
+}
+
+export function calculateDerivedLoanPrincipalOutstanding(loan, state) {
+  if (!isOutstandingLoan(loan)) return 0;
+  const completedTransactions = getCompletedTransactions(state.transactions || []);
+  const loanStartDate = loan.startDate || loan.distributionDate || "";
+  const principalPaid = completedTransactions
+    .filter((transaction) => loanBelongsToMember(loan, { id: transaction.memberId, fullName: transaction.memberName }))
+    .filter((transaction) => !loanStartDate || String(transaction.transactionDate || "") >= String(loanStartDate))
+    .filter((transaction) => !isMigratedOpeningTransaction(transaction))
+    .reduce((sum, transaction) => sum + Number(transaction.allocation?.principal || 0), 0);
+  const originalAmount = Number(loan.amount || loan.principalOutstanding || 0);
+  if (principalPaid === 0) return Math.max(0, Number(loan.principalOutstanding || originalAmount || 0));
+  return Math.max(0, originalAmount - principalPaid);
+}
+
+export function calculateDerivedLoanOutstanding(loans, state) {
+  return (loans || []).filter(isOutstandingLoan).reduce((sum, loan) => sum + calculateDerivedLoanPrincipalOutstanding(loan, state), 0);
+}
+
+export function calculateLoanOutstandingWithDues(loan, state) {
+  return calculateDerivedLoanPrincipalOutstanding(loan, state)
+    + Number(loan?.interestOutstanding || 0)
+    + Number(loan?.penaltyOutstanding || 0);
+}
+
+export function buildOpeningShareRatioRows({ members = [], state, currentMemberId, currentSaving = 0, amount = 0 }) {
+  const activeMembers = members.filter((member) => member.status !== "Inactive");
+  const weightedRows = activeMembers.map((member) => {
+    const summary = calculateMemberLedgerSummary(member, state);
+    const openingShare = Math.max(0, Number(summary.savings || 0) + (String(member.id) === String(currentMemberId) ? Number(currentSaving || 0) : 0));
+    return { member, openingShare };
+  });
+  const totalShare = weightedRows.reduce((sum, row) => sum + row.openingShare, 0);
+  let remaining = Number(amount || 0);
+  return weightedRows.map((row, index) => {
+    const shareAmount = totalShare > 0
+      ? (index === weightedRows.length - 1 ? Number(remaining.toFixed(2)) : Number(((Number(amount || 0) * row.openingShare) / totalShare).toFixed(2)))
+      : (index === weightedRows.length - 1 ? Number(remaining.toFixed(2)) : Number((Number(amount || 0) / Math.max(1, weightedRows.length)).toFixed(2)));
+    remaining -= shareAmount;
+    return { member: row.member, openingShare: row.openingShare, amount: shareAmount };
+  }).filter((row) => Math.abs(row.amount) > 0.009);
+}
+
+export function calculateDerivedOpeningSurplus({ state, currentSaving = 0, currentLoan = 0, groupBankBalance = 0, groupExpense = 0 }) {
+  const completedTransactions = getCompletedTransactions(state.transactions || []);
+  const existingSavings = calculateTotalSavings(completedTransactions, state.members);
+  const existingLoanOutstanding = calculateDerivedLoanOutstanding(state.loans || [], state);
+  return Number(groupBankBalance || 0)
+    + existingLoanOutstanding
+    + Number(currentLoan || 0)
+    - existingSavings
+    - Number(currentSaving || 0)
+    + Number(groupExpense || 0);
+}
+
+export function configuredNumber(primary, fallback, defaultValue = 0) {
+  const hasPrimary = primary !== null && primary !== undefined && primary !== "";
+  const primaryNumber = Number(primary);
+  if (hasPrimary && Number.isFinite(primaryNumber)) return primaryNumber;
+  const hasFallback = fallback !== null && fallback !== undefined && fallback !== "";
+  const fallbackNumber = Number(fallback);
+  if (hasFallback && Number.isFinite(fallbackNumber)) return fallbackNumber;
+  return defaultValue;
+}
+
+export function getEffectiveMemberSetup(member, group = {}) {
+  return {
+    monthlySaving: configuredNumber(member?.customSavingAmount ?? member?.monthlySaving, group.monthlySaving, 0),
+    interestRate: configuredNumber(member?.interestRate, group.interestRate, 0),
+    loanTenureMonths: configuredNumber(member?.loanTenureMonths, group.loanTenureMonths, 0),
+    loanLimit: configuredNumber(member?.loanLimit, group.maximumLoanLimit, 0),
+    loanDueDay: configuredNumber(member?.loanDueDay, group.loanDueDay, 1),
+    interestType: member?.interestType || group.interestType || "Reducing"
+  };
+}
+
+export function completedTransactionsForMember(state, memberId, untilDate = null) {
+  return getCompletedTransactions(state.transactions || [])
+    .filter((transaction) => String(transaction.memberId) === String(memberId))
+    .filter((transaction) => !untilDate || String(transaction.transactionDate || "") <= String(untilDate));
+}
+
+export function allocationPaidForMember(state, memberId, bucket, { fromDate = null, untilDate = null } = {}) {
+  return completedTransactionsForMember(state, memberId, untilDate)
+    .filter((transaction) => !fromDate || String(transaction.transactionDate || "") >= String(fromDate))
+    .filter((transaction) => transaction.transactionType !== "Waiver")
+    .filter((transaction) => !isMigratedOpeningTransaction(transaction))
+    .reduce((sum, transaction) => sum + Math.max(0, Number(transaction.allocation?.[bucket] || 0)), 0);
+}
+
+export function allocationWaivedForMember(state, memberId, bucket, { untilDate = null } = {}) {
+  return completedTransactionsForMember(state, memberId, untilDate)
+    .filter((transaction) => transaction.transactionType === "Waiver")
+    .reduce((sum, transaction) => sum + Math.abs(Math.min(0, Number(transaction.allocation?.[bucket] || 0))), 0);
+}
+
+export function getLoanInterestForDate(loan, member, state, dateValue) {
+  const group = state.groups?.[0] ?? {};
+  const setup = getEffectiveMemberSetup(member, group);
+  const targetDate = new Date(dateValue || new Date());
+  const disbursementDate = new Date(loan.startDate || loan.distributionDate || targetDate);
+  const startDate = group.loanInterestStartMode === "fullMonth"
+    ? new Date(targetDate.getFullYear(), targetDate.getMonth(), 1)
+    : disbursementDate;
+  const days = group.loanInterestStartMode === "fullMonth"
+    ? 30
+    : Math.max(0, Math.ceil((targetDate - startDate) / (1000 * 60 * 60 * 24)));
+  if (days <= 0 || Number(loan.principalOutstanding || 0) <= 0) return 0;
+  return calculateLoanInterest({
+    principalOutstanding: Number(loan.principalOutstanding || 0),
+    originalPrincipal: Number(loan.amount || loan.principalOutstanding || 0),
+    monthlyRate: configuredNumber(setup.interestRate, loan.rate, 0),
+    days,
+    interestType: setup.interestType
+  });
+}
+
+export function calculateMemberLoanInterestDueDetails(member, state, dueDate, paymentUntilDate = dueDate) {
+  const group = state.groups?.[0] ?? {};
+  const setup = getEffectiveMemberSetup(member, group);
+  const paymentUntilIso = toIsoDateValue(paymentUntilDate);
+  const activeLoans = (state.loans || [])
+    .filter((loan) => loanBelongsToMember(loan, member) && isOutstandingLoan(loan))
+    .sort((a, b) => String(a.startDate || a.distributionDate || "").localeCompare(String(b.startDate || b.distributionDate || "")));
+  const rawRows = activeLoans.map((loan) => {
+    const start = new Date(loan.startDate || loan.distributionDate || new Date());
+    const days = Math.max(0, Math.ceil((dueDate - start) / (1000 * 60 * 60 * 24)));
+    const calculated = days > 0 ? calculateLoanInterest({
+      principalOutstanding: Number(loan.principalOutstanding || 0),
+      originalPrincipal: Number(loan.amount || loan.principalOutstanding || 0),
+      monthlyRate: configuredNumber(setup.interestRate, loan.rate, 0),
+      days,
+      interestType: setup.interestType
+    }) : 0;
+    return {
+      loan,
+      calculated,
+      migratedInterest: Number(loan.interestOutstanding || 0),
+      dueBeforePayments: calculated + Number(loan.interestOutstanding || 0),
+      due: calculated + Number(loan.interestOutstanding || 0)
+    };
+  });
+  let paid = allocationPaidForMember(state, member?.id, "interest", { untilDate: paymentUntilIso });
+  let waived = allocationWaivedForMember(state, member?.id, "interest", { untilDate: paymentUntilIso });
+  return rawRows.map((row) => {
+    const paidHere = Math.min(row.due, paid);
+    row.due -= paidHere;
+    paid -= paidHere;
+    const waivedHere = Math.min(row.due, waived);
+    row.due -= waivedHere;
+    waived -= waivedHere;
+    return { ...row, paidApplied: paidHere, waivedApplied: waivedHere, due: Math.max(0, row.due) };
+  });
+}
+
+export function getCurrentMember(state, actor) {
+  return (state.members || []).find((member) =>
+    String(member.id) === String(actor?.memberId)
+    || (member.email && actor?.email && member.email.toLowerCase() === actor.email.toLowerCase())
+    || (member.username && actor?.username && member.username.toLowerCase() === actor.username.toLowerCase())
+  ) ?? state.members?.[0];
+}
+
+export function isDateInPeriod(dateValue, period) {
+  if (!dateValue || !period) return false;
+  return dateValue >= period.startDate && dateValue <= period.endDate;
+}
+
+export function getDashboardPeriod(state) {
+  const openPeriodValue = getOpenPeriod(state.periods || []);
+  const fallbackPeriod = getCurrentMonthPeriod(state.periods || []);
+  const today = new Date();
+  return openPeriodValue ?? fallbackPeriod ?? {
+    name: today.toLocaleString("default", { month: "long", year: "numeric" }),
+    startDate: `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`,
+    endDate: `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()).padStart(2, "0")}`
+  };
+}
+
+export function getLoanDueDate(group) {
+  const today = new Date();
+  const dueDay = Math.min(28, Math.max(1, Number(group?.loanDueDay || 1)));
+  const candidate = new Date(today.getFullYear(), today.getMonth(), dueDay);
+  if (candidate < today) {
+    candidate.setMonth(candidate.getMonth() + 1);
+  }
+  return candidate;
+}
+
+export function calculateMemberLoanInterestDue(member, state, dueDate, paymentUntilDate = dueDate) {
+  return calculateMemberLoanInterestDueDetails(member, state, dueDate, paymentUntilDate)
+    .reduce((sum, row) => sum + Number(row.due || 0), 0);
+}
+
+export function getPeriodDueDate(group, period) {
+  const base = new Date(period?.startDate || new Date());
+  const dueDay = Math.min(28, Math.max(1, Number(group?.loanDueDay || 1)));
+  return new Date(base.getFullYear(), base.getMonth(), dueDay);
+}
+
+export function getDuePeriods(state) {
+  const today = new Date();
+  const group = state.groups?.[0] ?? {};
+  const nextDue = getLoanDueDate(group);
+  const periods = (state.periods || [])
+    .filter((period) => period?.startDate)
+    .filter((period) => new Date(period.startDate) <= nextDue)
+    .sort((a, b) => String(a.startDate).localeCompare(String(b.startDate)));
+  if (periods.length > 0) return periods;
+  return [getDashboardPeriod(state)].filter(Boolean).map((period) => ({
+    ...period,
+    id: period.id ?? `due_${today.getFullYear()}_${today.getMonth() + 1}`
+  }));
+}
+
+export function calculatePendingDues(state, actor = null, memberOnly = false) {
+  const group = state.groups?.[0] ?? {};
+  const completedTransactions = getCompletedTransactions(state.transactions || []);
+  const dismissedDueIds = new Set((state.dismissedPendingDues || []).map(String));
+  const groupStartDate = new Date(group.createdDate || group.startDate || group.creationDate || "1900-01-01");
+  groupStartDate.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+  const targetMember = memberOnly ? getCurrentMember(state, actor) : null;
+  const members = (state.members || [])
+    .filter((member) => member.status !== "Inactive")
+    .filter((member) => !targetMember || String(member.id) === String(targetMember.id));
+  const periods = getDuePeriods(state);
+
+  return periods.flatMap((period) => {
+    const dueDate = getPeriodDueDate(group, period);
+    if (dueDate < groupStartDate) return [];
+    const dueDateIso = toIsoDateValue(dueDate);
+    const periodEnd = new Date(period.endDate || dueDate);
+    const paymentCutoff = periodEnd < today ? periodEnd : today;
+    const paymentCutoffIso = toIsoDateValue(paymentCutoff);
+    return members.map((member) => {
+      const setup = getEffectiveMemberSetup(member, group);
+      const transactions = completedTransactions.filter((transaction) =>
+        String(transaction.memberId) === String(member.id)
+        && isDateInPeriod(transaction.transactionDate, period)
+      );
+      const savingSetup = setup.monthlySaving;
+      const savingPaid = transactions.reduce((sum, transaction) =>
+        sum + Number(transaction.allocation?.savings || 0) + Number(transaction.allocation?.excess || 0), 0);
+      const savingDue = Math.max(0, savingSetup - savingPaid);
+      const memberLoans = (state.loans || []).filter((loan) =>
+        loanBelongsToMember(loan, member)
+        && isOutstandingLoan(loan)
+        && new Date(loan.startDate || period.startDate) <= dueDate
+      );
+      const outstandingPrincipal = memberLoans.reduce((sum, loan) => sum + Number(loan.principalOutstanding || 0), 0);
+      const interestDue = calculateMemberLoanInterestDue(member, state, dueDate, paymentCutoff);
+      const allPenaltyPaidTillCutoff = allocationPaidForMember(state, member.id, "penalty", { untilDate: paymentCutoffIso });
+      const allPenaltyWaivedTillCutoff = allocationWaivedForMember(state, member.id, "penalty", { untilDate: paymentCutoffIso });
+      const openingPenaltyDue = Number(member.penaltyOutstanding || 0)
+        + memberLoans.reduce((sum, loan) => sum + Number(loan.penaltyOutstanding || 0), 0);
+      const penaltyDue = Math.max(0, openingPenaltyDue + (dueDate < today && (savingDue + interestDue) > 0 ? Number(group.penaltyAmount || 0) : 0) - allPenaltyPaidTillCutoff - allPenaltyWaivedTillCutoff);
+      const totalDue = savingDue + interestDue + penaltyDue;
+      return {
+        id: `${period.id}_${member.id}`,
+        periodName: period.name,
+        memberId: member.id,
+        memberName: member.fullName,
+        dueDate: dueDateIso,
+        savingDue,
+        outstandingPrincipal,
+        interestDue,
+        penaltyDue,
+        totalDue
+      };
+    }).filter((row) => row.totalDue > 0 && !dismissedDueIds.has(String(row.id)));
+  });
+}

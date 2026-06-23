@@ -4,6 +4,7 @@ import {
   Bell,
   BookOpen,
   CalendarCheck,
+  Calculator,
   Camera,
   CheckCircle2,
   CreditCard,
@@ -18,6 +19,7 @@ import {
   LogOut,
   Menu,
   MessageCircle,
+  BotMessageSquare,
   Search,
   Settings,
   ShieldCheck,
@@ -32,7 +34,6 @@ import {
   allocateIncomingPayment,
   calculateLoanEligibility,
   calculateLoanInterest,
-  calculateTotalSavings,
   calculateEventBasedShareDistribution,
   interestTypeDescriptions
 } from "./services/calculationEngine";
@@ -43,6 +44,35 @@ import { audit, initialState, loadState, makeId, saveState } from "./services/st
 import { groupSchema, loanSchema, legacyMigrationSchema, memberSchema, otpPasswordSchema, passwordResetSchema, registerSchema, transactionSchema, validate } from "./services/validation";
 import { repository } from "./services/repository";
 import { downloadOrSharePdf, generateReportPdf, makeReportFileName } from "./services/reportPdf";
+import {
+  allocationPaidForMember,
+  allocationWaivedForMember,
+  buildOpeningShareRatioRows,
+  calculateDerivedLoanOutstanding,
+  calculateDerivedLoanPrincipalOutstanding,
+  calculateDerivedOpeningSurplus,
+  calculateGroupFinanceSummary,
+  calculateMemberFinanceSummary,
+  calculateMemberLedgerSummary,
+  calculateMemberLoanInterestDue,
+  calculateMemberLoanInterestDueDetails,
+  calculatePendingDues,
+  calculateLoanOutstandingWithDues,
+  configuredNumber,
+  financeFieldDictionary,
+  getCompletedTransactions,
+  getCurrentMember,
+  getDashboardPeriod,
+  getEffectiveMemberSetup,
+  getLoanDueDate,
+  getLoanInterestForDate,
+  isCompletedFinancialStatus,
+  isDateInPeriod,
+  isMigratedOpeningTransaction,
+  isOutstandingLoan,
+  loanBelongsToMember,
+  toIsoDateValue
+} from "./services/financeFields";
 
 const currency = new Intl.NumberFormat("en-IN", {
   style: "currency",
@@ -51,6 +81,82 @@ const currency = new Intl.NumberFormat("en-IN", {
 });
 
 const GROUP_EXPENSE_MEMBER_ID = "__GROUP_EXPENSE__";
+
+const bilingualLabels = {
+  Dashboard: "डॅशबोर्ड (Dashboard)",
+  "Group Dashboard": "गट डॅशबोर्ड (Group Dashboard)",
+  "Member Dashboard": "सभासद डॅशबोर्ड (Member Dashboard)",
+  "My Dashboard": "माझा डॅशबोर्ड (My Dashboard)",
+  Members: "सभासद (Members)",
+  Setup: "सेटअप (Setup)",
+  Operations: "व्यवहार (Operations)",
+  Transactions: "व्यवहार (Transactions)",
+  Loans: "कर्ज (Loans)",
+  Withdrawals: "पैसे काढणे (Withdrawals)",
+  "Pending Dues": "बाकी रक्कम (Pending Dues)",
+  Corrections: "दुरुस्ती (Corrections)",
+  Approvals: "मंजुरी (Approvals)",
+  "Reports & Audit": "रिपोर्ट व ऑडिट (Reports & Audit)",
+  Contact: "संपर्क (Contact)",
+  Subscriptions: "सबस्क्रिप्शन (Subscriptions)",
+  "AI Agent": "AI सहाय्यक (AI Agent)",
+  "User Guide": "वापर मार्गदर्शक (User Guide)",
+  "Full name": "पूर्ण नाव (Full Name)",
+  Member: "सभासद (Member)",
+  Email: "ईमेल (Email)",
+  Mobile: "मोबाईल (Mobile)",
+  Username: "युजरनेम (Username)",
+  Savings: "बचत (Savings)",
+  Loan: "कर्ज (Loan)",
+  Status: "स्थिती (Status)",
+  Amount: "रक्कम (Amount)",
+  Interest: "व्याज (Interest)",
+  Penalty: "दंड (Penalty)",
+  Principal: "मुद्दल (Principal)",
+  Excess: "जादा (Excess)",
+  "Total savings": "एकूण बचत (Total Savings)",
+  "Collected in period": "कालावधीतील जमा (Collected)",
+  "Active loan amount": "सक्रिय कर्ज रक्कम (Active Loan)",
+  "Remaining balance": "शिल्लक रक्कम (Remaining Balance)",
+  "Active loans": "सक्रिय कर्जे (Active Loans)",
+  "Open period": "चालू महिना (Open Period)",
+  "Share amount": "हिस्सा रक्कम (Share Amount)",
+  "Loan balance": "कर्ज बाकी (Loan Balance)",
+  "Next minimum due": "पुढील किमान देय (Next Due)",
+  "Share percentage": "हिस्सा टक्केवारी (Share %)",
+  "Add member": "नवीन सभासद जोडा (Add Member)",
+  "Post collection": "जमा व्यवहार (Post Collection)",
+  "Create loan request": "कर्ज विनंती (Create Loan Request)",
+  "New withdrawal request": "पैसे काढण्याची विनंती (Withdrawal Request)",
+  "Finance Assistant": "वित्त सहाय्यक (Finance Assistant)"
+  ,
+  "Share Calculator": "हिस्सा कॅल्क्युलेटर (Share Calculator)",
+  "Calculator": "कॅल्क्युलेटर (Calculator)",
+  "Member share calculator": "सभासद हिस्सा कॅल्क्युलेटर (Member Share Calculator)",
+  "Member full settlement calculator": "सभासद पूर्ण सेटलमेंट (Full Settlement)",
+  "Remaining money in account": "खात्यातील शिल्लक रक्कम (Remaining Money)",
+  "Outstanding loan": "बाकी कर्ज (Outstanding Loan)",
+  "Per member monthly saving": "प्रति सभासद मासिक बचत (Per Member Saving)",
+  "Number of members": "सभासद संख्या (Number of Members)",
+  "Total amount": "एकूण रक्कम (Total Amount)",
+  "Per member share": "प्रति सभासद हिस्सा (Per Member Share)",
+  "Group gain": "गट नफा (Group Gain)",
+  "Per member gain": "प्रति सभासद नफा (Per Member Gain)",
+  "Check total": "एकूण पडताळणी (Check Total)",
+  "Member share amount": "सभासद हिस्सा रक्कम (Member Share Amount)",
+  "Total group share amount": "गटाची एकूण हिस्सा रक्कम (Total Group Share)",
+  "Profit pool / group gain": "नफा पूल / गट नफा (Profit Pool)",
+  "Interest amount": "व्याज रक्कम (Interest Amount)",
+  "Penalty amount": "दंड रक्कम (Penalty Amount)",
+  "Other deduction": "इतर कपात (Other Deduction)",
+  "Other addition": "इतर जमा (Other Addition)",
+  "Profit share": "नफा हिस्सा (Profit Share)",
+  "Final withdrawable amount": "अंतिम काढता येणारी रक्कम (Final Withdrawable)"
+};
+
+function bilingual(label) {
+  return bilingualLabels[label] ?? label;
+}
 
 const navIcons = {
   Dashboard: Landmark,
@@ -81,6 +187,7 @@ navIcons["Request Withdrawal"] = WalletCards;
 navIcons["Pending Dues"] = CalendarCheck;
 navIcons.Operations = WalletCards;
 navIcons.Waivers = ShieldCheck;
+navIcons["AI Agent"] = BotMessageSquare;
 
 function buildSidebarSections(menu, role) {
   const byLabel = Object.fromEntries((menu || []).map((item) => [item.label, item]));
@@ -104,7 +211,7 @@ function buildSidebarSections(menu, role) {
         { path: "/setup/roles", label: "Role Setup" },
         { path: "/setup/loan", label: "Loan Setup" },
         { path: "/setup/periods", label: "Period Setup" },
-        { path: "/setup/legacy", label: "Legacy Migration" }
+        { path: "/setup/calculator", label: "Share Calculator" }
       ]
     },
     {
@@ -113,7 +220,8 @@ function buildSidebarSections(menu, role) {
         has("Transactions") && { path: "/operations/transactions", label: "Transactions" },
         (has("Loans") || has("Request Loan")) && { path: "/operations/loans", label: adminLike ? "Loans" : "Request Loan" },
         (has("Withdrawals") || has("Request Withdrawal")) && { path: "/operations/withdrawals", label: adminLike ? "Withdrawals" : "Request Withdrawal" },
-        has("Pending Dues") && { path: "/pending-dues", label: "Pending Dues" }
+        has("Pending Dues") && { path: "/pending-dues", label: "Pending Dues" },
+        has("AI Agent") && { path: "/ai-agent", label: "AI Agent" }
       ].filter(Boolean)
     },
     {
@@ -484,7 +592,7 @@ function App() {
               return (
                 <NavLink key={section.path} to={section.path} onClick={() => setMobileNavOpen(false)}>
                   <Icon size={18} />
-                  <span>{section.label}</span>
+                  <span>{bilingual(section.label)}</span>
                 </NavLink>
               );
             }
@@ -497,13 +605,13 @@ function App() {
                   onClick={() => setExpandedMenu((current) => current === section.label ? "" : section.label)}
                 >
                   <Icon size={18} />
-                  <span>{section.label}</span>
+                  <span>{bilingual(section.label)}</span>
                 </button>
                 {isOpen && (
                   <div className="nav-submenu">
                     {section.children.map((item) => (
                       <NavLink key={item.path} to={item.path} onClick={() => setMobileNavOpen(false)}>
-                        <span>{item.label}</span>
+                        <span>{bilingual(item.label)}</span>
                       </NavLink>
                     ))}
                   </div>
@@ -515,7 +623,7 @@ function App() {
 
         <NavLink className="sidebar-guide-link" to="/guide" onClick={() => setMobileNavOpen(false)}>
           <BookOpen size={18} />
-          <span>User Guide</span>
+          <span>{bilingual("User Guide")}</span>
         </NavLink>
 
         <div className="sidebar-card profile-card">
@@ -549,7 +657,7 @@ function App() {
           <div className="topbar-title">
             <div>
               <p className="eyebrow">Bachat Gat finance platform</p>
-              <h1>Finance workflow console</h1>
+              <h1>प्रगती (Finance Console)</h1>
             </div>
             <button className="icon-button notification-top-right" type="button" aria-label="Notifications" onClick={() => navigate("/notifications")}>
               <Bell size={16} />
@@ -649,6 +757,7 @@ function App() {
           <Route path="/withdrawals" element={<Withdrawals state={visibleViewState} setState={patchState} actor={{ ...state.session.user, role }} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
           <Route path="/operations/withdrawals" element={<Withdrawals state={visibleViewState} setState={patchState} actor={{ ...state.session.user, role }} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
           <Route path="/pending-dues" element={<PendingDues state={visibleViewState} setState={patchState} actor={{ ...state.session.user, role }} setNotification={setNotification} />} />
+          <Route path="/ai-agent" element={<FinanceAgent state={visibleViewState} actor={{ ...state.session.user, role }} setNotification={setNotification} />} />
           <Route path="/corrections" element={<Corrections state={viewState} setState={patchState} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
           <Route path="/corrections/adjustments" element={<Adjustments state={viewState} setState={patchState} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
           <Route path="/corrections/reversals" element={<Reversals state={viewState} setState={patchState} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
@@ -670,7 +779,8 @@ function App() {
           <Route path="/setup/loan" element={<SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="financial" initialFinancialTab="loan" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} />} />
           <Route path="/setup/periods" element={<SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="financial" initialFinancialTab="period" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} />} />
           <Route path="/setup/roles" element={<SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="financial" initialFinancialTab="roles" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} />} />
-          <Route path="/setup/legacy" element={<SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="financial" initialFinancialTab="legacy" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} />} />
+          <Route path="/setup/calculator" element={<SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="financial" initialFinancialTab="calculator" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} />} />
+          <Route path="/setup/legacy" element={<SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="financial" initialFinancialTab="calculator" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} />} />
           <Route path="/guide" element={<GuidePage insideApp />} />
           <Route path="*" element={<Dashboard role={role} state={viewState} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
         </Routes>
@@ -723,7 +833,7 @@ function App() {
                   rows={memberSummary.memberActiveLoans.map((loan) => [
                     currency.format(loan.amount),
                     loan.startDate ?? "",
-                    currency.format(loan.principalOutstanding),
+                    currency.format(calculateLoanOutstandingWithDues(loan, state)),
                     currency.format(loan.interestPaidTillNow || 0)
                   ])}
                 />
@@ -1566,6 +1676,8 @@ function Dashboard({ role, state, actor, forceGroupView = false, memberPortal = 
   const dashboardPeriod = getDashboardPeriod(state);
   const openPeriodName = dashboardPeriod.name;
   const groupSummary = calculateGroupFinanceSummary(state, dashboardPeriod);
+  const groupFields = financeFieldDictionary.group;
+  const memberFields = financeFieldDictionary.member;
 
   if ((role === roles.MEMBER || memberPortal) && !forceGroupView) {
     const canChooseMember = role !== roles.MEMBER;
@@ -1588,12 +1700,12 @@ function Dashboard({ role, state, actor, forceGroupView = false, memberPortal = 
         )}
         <MetricGrid
           metrics={[
-            metric("Savings", currency.format(memberSummary.savings), Users, [`This month: ${currency.format(memberSummary.monthlySavings)}`, `Withdrawn: ${currency.format(memberSummary.withdrawn)}`]),
-            metric("Collected this month", currency.format(memberSummary.monthlyCollections), WalletCards, [`Principal: ${currency.format(memberSummary.monthlyPrincipal)}`, `Interest: ${currency.format(memberSummary.monthlyInterest)}`, `Penalty: ${currency.format(memberSummary.monthlyPenalty)}`, `Withdrawn: ${currency.format(memberSummary.monthlyWithdrawn)}`]),
-            metric("Share amount", currency.format(memberSummary.shareAmount), WalletCards, [`Gain: ${currency.format(memberSummary.gain)}`, `Expense: ${currency.format(memberSummary.expense)}`]),
-            metric("Loan balance", currency.format(memberSummary.outstanding), IndianRupee, [`Active loans: ${memberSummary.memberActiveLoans.length}`, `Disbursed till now: ${currency.format(memberSummary.memberLoans.reduce((sum, loan) => sum + Number(loan.amount || 0), 0))}`]),
-            metric("Next minimum due", currency.format(memberSummary.nextDueAmount), CalendarCheck, [`Saving due: ${currency.format(memberSummary.dueRows.reduce((sum, row) => sum + Number(row.savingDue || 0), 0))}`, `Interest remaining: ${currency.format(memberSummary.interestDue)}`, `Penalty due: ${currency.format(memberSummary.dueRows.reduce((sum, row) => sum + Number(row.penaltyDue || 0), 0))}`, `Due: ${memberSummary.dueDate.toLocaleDateString("en-IN", { year: "numeric", month: "long", day: "numeric" })}`]),
-            metric("Share percentage", `${memberSummary.sharePercent ?? 0}%`, WalletCards)
+            metric(memberFields.savings.label, currency.format(memberSummary.savings), Users, [`This month: ${currency.format(memberSummary.monthlySavings)}`, `Withdrawn: ${currency.format(memberSummary.withdrawn)}`]),
+            metric(memberFields.monthlyCollections.label, currency.format(memberSummary.monthlyCollections), WalletCards, [`Principal: ${currency.format(memberSummary.monthlyPrincipal)}`, `Interest: ${currency.format(memberSummary.monthlyInterest)}`, `Penalty: ${currency.format(memberSummary.monthlyPenalty)}`, `Withdrawn: ${currency.format(memberSummary.monthlyWithdrawn)}`]),
+            metric(memberFields.shareAmount.label, currency.format(memberSummary.shareAmount), WalletCards, [`Gain: ${currency.format(memberSummary.gain)}`, `Expense: ${currency.format(memberSummary.expense)}`]),
+            metric(memberFields.outstanding.label, currency.format(memberSummary.outstanding), IndianRupee, [`Active loans: ${memberSummary.memberActiveLoans.length}`, `Disbursed till now: ${currency.format(memberSummary.memberLoans.reduce((sum, loan) => sum + Number(loan.amount || 0), 0))}`]),
+            metric(memberFields.nextDueAmount.label, currency.format(memberSummary.nextDueAmount), CalendarCheck, [`Saving due: ${currency.format(memberSummary.dueRows.reduce((sum, row) => sum + Number(row.savingDue || 0), 0))}`, `Interest remaining: ${currency.format(memberSummary.interestDue)}`, `Penalty due: ${currency.format(memberSummary.dueRows.reduce((sum, row) => sum + Number(row.penaltyDue || 0), 0))}`, `Due: ${memberSummary.dueDate.toLocaleDateString("en-IN", { year: "numeric", month: "long", day: "numeric" })}`]),
+            metric(memberFields.sharePercent.label, `${memberSummary.sharePercent ?? 0}%`, WalletCards)
           ]}
         />
         <Section title="Next payment">
@@ -1620,10 +1732,10 @@ function Dashboard({ role, state, actor, forceGroupView = false, memberPortal = 
     <Page title="Group Dashboard" subtitle="Live operating view for collectors, admins, approvers, and members" action={role === roles.MEMBER ? <button type="button" className="secondary-button" onClick={() => navigate("/")}>My Dashboard</button> : null}>
       <MetricGrid
         metrics={[
-          metric("Total savings", currency.format(groupSummary.totalSavings), WalletCards, [`Members: ${state.members.length}`, `Active members: ${state.members.filter((member) => member.status !== "Inactive").length}`, `Withdrawn: ${currency.format(groupSummary.totalWithdrawn)}`]),
-          metric(`Collected in ${openPeriodName}`, currency.format(groupSummary.monthlyCollections), WalletCards, [`Savings: ${currency.format(groupSummary.monthlySavings)}`, `Principal collected: ${currency.format(groupSummary.monthlyPrincipal)}`, `Interest collected: ${currency.format(groupSummary.monthlyInterest)}`, `Penalty collected: ${currency.format(groupSummary.monthlyPenalty)}`, `Withdrawn: ${currency.format(groupSummary.monthlyWithdrawn)}`]),
-          metric("Active loan amount", currency.format(groupSummary.totalActiveLoan), IndianRupee, [`Disbursed this month: ${currency.format(groupSummary.monthlyLoanDisbursed)}`, `Loan disbursed till now: ${currency.format(groupSummary.totalLoanDisbursedAmount)}`, `Loan repaid till now: ${currency.format(groupSummary.overallPrincipalCollected)}`]),
-          metric("Remaining balance", currency.format(groupSummary.remainingBalance), WalletCards, [`Loan outstanding: ${currency.format(groupSummary.totalActiveLoan)}`, `Expense: ${currency.format(groupSummary.totalExpenses)}`, `Gain: ${currency.format(groupSummary.groupGain)}`, `Opening balance: ${currency.format(groupSummary.legacyOpening.openingBankBalance)}`, `Savings: ${currency.format(groupSummary.totalSavings)}`]),
+          metric(groupFields.totalSavings.label, currency.format(groupSummary.totalSavings), WalletCards, [`Members: ${state.members.length}`, `Active members: ${state.members.filter((member) => member.status !== "Inactive").length}`, `Withdrawn: ${currency.format(groupSummary.totalWithdrawn)}`]),
+          metric(`${groupFields.monthlyCollections.label} ${openPeriodName}`, currency.format(groupSummary.monthlyCollections), WalletCards, [`Savings: ${currency.format(groupSummary.monthlySavings)}`, `Principal collected: ${currency.format(groupSummary.monthlyPrincipal)}`, `Interest collected: ${currency.format(groupSummary.monthlyInterest)}`, `Penalty collected: ${currency.format(groupSummary.monthlyPenalty)}`, `Withdrawn: ${currency.format(groupSummary.monthlyWithdrawn)}`]),
+          metric(groupFields.totalActiveLoan.label, currency.format(groupSummary.totalActiveLoan), IndianRupee, [`Disbursed this month: ${currency.format(groupSummary.monthlyLoanDisbursed)}`, `Loan disbursed till now: ${currency.format(groupSummary.totalLoanDisbursedAmount)}`, `Loan repaid till now: ${currency.format(groupSummary.overallPrincipalCollected)}`]),
+          metric(groupFields.remainingBalance.label, currency.format(groupSummary.remainingBalance), WalletCards, [`Loan outstanding: ${currency.format(groupSummary.totalActiveLoan)}`, `Expense: ${currency.format(groupSummary.totalExpenses)}`, `Gain: ${currency.format(groupSummary.groupGain)}`, `Opening balance: ${currency.format(groupSummary.legacyOpening.openingBankBalance)}`, `Savings: ${currency.format(groupSummary.totalSavings)}`]),
           metric("Active loans", String(groupSummary.activeLoans.length), Users, [`Closed till now: ${groupSummary.closedLoanCount}`, `Activated this month: ${groupSummary.activatedThisMonth}`, `Disbursed till now: ${groupSummary.totalLoanDisbursedCount}`]),
           metric("Open period", openPeriodValue?.name ?? "None", ShieldCheck)
         ].filter(Boolean)}
@@ -1634,14 +1746,6 @@ function Dashboard({ role, state, actor, forceGroupView = false, memberPortal = 
 
 function isUuid(value) {
   return (typeof value === "number" && Number.isFinite(value)) || (typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value));
-}
-
-function toIsoDateValue(date = new Date()) {
-  const value = date instanceof Date ? date : new Date(date);
-  const year = value.getFullYear();
-  const month = String(value.getMonth() + 1).padStart(2, "0");
-  const day = String(value.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
 }
 
 function getMonthPeriodDraft(year, month) {
@@ -1746,187 +1850,6 @@ function hasActiveAdminMember(members = [], adminNames = []) {
     && !(member.inactiveDate && member.inactiveDate <= toIsoDateValue())
     && isMemberNamedAdmin(member, adminNames)
   );
-}
-
-function isOutstandingLoan(loan) {
-  return loan
-    && (loan.principalOutstanding || 0) > 0
-    && (
-      isCompletedFinancialStatus(loan.approvalStatus)
-      || ["ACTIVE", "COMPLETED", "APPROVED"].includes(String(loan.status ?? loan.loanStatus ?? "").toUpperCase())
-    );
-}
-
-function isMigratedOpeningTransaction(transaction) {
-  return transaction?.transactionType === "Migrated";
-}
-
-function getOpeningNumber(row, snakeKey, camelKey) {
-  return Number(row?.[snakeKey] ?? row?.[camelKey] ?? 0);
-}
-
-function getCompletedLegacyGroupOpenings(state) {
-  return (state.legacyGroupOpenings || []).filter((row) =>
-    isCompletedFinancialStatus(row.approval_status ?? row.approvalStatus)
-  );
-}
-
-function sumCollectedAllocation(transactions = [], bucket) {
-  return transactions.reduce((sum, transaction) => {
-    if (isMigratedOpeningTransaction(transaction) && !["savings", "excess"].includes(bucket)) {
-      return sum;
-    }
-    return sum + Number(transaction.allocation?.[bucket] || 0);
-  }, 0);
-}
-
-function sumCollectedSavings(transactions = []) {
-  return transactions.reduce((sum, transaction) => {
-    if (isMigratedOpeningTransaction(transaction) || transaction.transactionType === "Withdrawal") return sum;
-    return sum + Number(transaction.allocation?.savings || 0) + Number(transaction.allocation?.excess || 0);
-  }, 0);
-}
-
-function calculateLegacyGroupOpeningSummary(state, { totalSavings = 0, activeLoanOutstanding = 0 } = {}) {
-  const rows = getCompletedLegacyGroupOpenings(state);
-  const openingBankBalance = rows.reduce((sum, row) => sum + getOpeningNumber(row, "opening_bank_balance", "openingBankBalance"), 0);
-  const openingGroupExpense = rows.reduce((sum, row) => sum + getOpeningNumber(row, "opening_group_expense", "openingGroupExpense"), 0);
-  const explicitGroupGain = rows.reduce((sum, row) => sum + getOpeningNumber(row, "opening_group_gain", "openingGroupGain"), 0);
-  const derivedGroupGain = Math.max(0, openingBankBalance + Number(activeLoanOutstanding || 0) + openingGroupExpense - Number(totalSavings || 0));
-
-  return {
-    openingBankBalance,
-    openingGroupExpense,
-    explicitGroupGain,
-    derivedGroupGain,
-    groupGain: explicitGroupGain + derivedGroupGain
-  };
-}
-
-function calculateGroupFinanceSummary(state, period = getDashboardPeriod(state)) {
-  const completedTransactions = getCompletedTransactions(state.transactions || []);
-  const completedExpenses = getCompletedTransactions(state.expenses || []);
-  const activeLoans = (state.loans || []).filter(isOutstandingLoan);
-  const completedLoans = (state.loans || []).filter((loan) =>
-    isCompletedFinancialStatus(loan.approvalStatus)
-    || ["ACTIVE", "COMPLETED", "APPROVED", "CLOSED"].includes(String(loan.status ?? loan.loanStatus ?? "").toUpperCase())
-  );
-  const totalSavings = calculateTotalSavings(completedTransactions, state.members || []);
-  const totalActiveLoan = calculateDerivedLoanOutstanding(activeLoans, state);
-  const legacyOpening = calculateLegacyGroupOpeningSummary(state, { totalSavings, activeLoanOutstanding: totalActiveLoan });
-  const totalExpenses = completedExpenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0) + legacyOpening.openingGroupExpense;
-  const collectedGain = completedTransactions.reduce((sum, trx) =>
-    isMigratedOpeningTransaction(trx) ? sum : sum + Number(trx.allocation?.interest || 0) + Number(trx.allocation?.penalty || 0), 0);
-  const groupGain = collectedGain + legacyOpening.groupGain;
-  const remainingBalance = Number(totalSavings || 0) + Number(groupGain || 0) - Number(totalActiveLoan || 0) - Number(totalExpenses || 0);
-  const periodTransactions = completedTransactions.filter((item) => isDateInPeriod(item.transactionDate, period));
-  const monthlyWithdrawn = periodTransactions
-    .filter((trx) => trx.transactionType === "Withdrawal")
-    .reduce((sum, trx) => sum + Math.abs(Number(trx.amount || trx.allocation?.savings || 0)), 0);
-  const totalWithdrawn = completedTransactions
-    .filter((trx) => trx.transactionType === "Withdrawal")
-    .reduce((sum, trx) => sum + Math.abs(Number(trx.amount || trx.allocation?.savings || 0)), 0);
-  const monthlySavings = sumCollectedSavings(periodTransactions);
-  const monthlyPrincipal = sumCollectedAllocation(periodTransactions, "principal");
-  const monthlyInterest = sumCollectedAllocation(periodTransactions, "interest");
-  const monthlyPenalty = sumCollectedAllocation(periodTransactions, "penalty");
-  const monthlyCollections = monthlySavings + monthlyPrincipal + monthlyInterest + monthlyPenalty - monthlyWithdrawn;
-  const monthlyLoanDisbursed = completedLoans
-    .filter((loan) => isDateInPeriod(loan.startDate, period))
-    .reduce((sum, loan) => sum + Number(loan.amount || 0), 0);
-
-  return {
-    completedTransactions,
-    completedExpenses,
-    activeLoans,
-    completedLoans,
-    totalSavings,
-    totalActiveLoan,
-    totalExpenses,
-    totalWithdrawn,
-    groupGain,
-    collectedGain,
-    legacyOpening,
-    remainingBalance,
-    monthlySavings,
-    monthlyPrincipal,
-    monthlyInterest,
-    monthlyPenalty,
-    monthlyWithdrawn,
-    monthlyCollections,
-    monthlyLoanDisbursed,
-    overallPrincipalCollected: sumCollectedAllocation(completedTransactions, "principal"),
-    totalLoanDisbursedAmount: completedLoans.reduce((sum, loan) => sum + Number(loan.amount || 0), 0),
-    totalLoanDisbursedCount: completedLoans.length,
-    closedLoanCount: completedLoans.filter((loan) => !isOutstandingLoan(loan)).length,
-    activatedThisMonth: completedLoans.filter((loan) => isDateInPeriod(loan.startDate, period)).length
-  };
-}
-
-function calculateMemberFinanceSummary(member, state, period = getDashboardPeriod(state), actor = null) {
-  const groupSummary = calculateGroupFinanceSummary(state, period);
-  const ledger = calculateMemberLedgerSummary(member, state);
-  const memberLoans = groupSummary.completedLoans.filter((loan) => loanBelongsToMember(loan, member));
-  const memberActiveLoans = memberLoans.filter(isOutstandingLoan);
-  const dueRows = calculatePendingDues(state, actor, false).filter((row) => String(row.memberId) === String(member?.id));
-  const dueDate = getLoanDueDate(state.groups?.[0]);
-  const interestDue = dueRows.reduce((sum, row) => sum + Number(row.interestDue || 0), 0) || calculateMemberLoanInterestDue(member, state, dueDate);
-  const nextDueAmount = dueRows.reduce((sum, row) => sum + Number(row.totalDue || 0), 0);
-  const completedTransactions = groupSummary.completedTransactions;
-  const memberTransactions = completedTransactions.filter((trx) => String(trx.memberId) === String(member?.id));
-  const memberPeriodTransactions = memberTransactions.filter((trx) => isDateInPeriod(trx.transactionDate, period));
-  const monthlyWithdrawn = memberPeriodTransactions
-    .filter((trx) => trx.transactionType === "Withdrawal")
-    .reduce((sum, trx) => sum + Math.abs(Number(trx.amount || trx.allocation?.savings || 0)), 0);
-  const monthlySavings = sumCollectedSavings(memberPeriodTransactions);
-  const monthlyPrincipal = sumCollectedAllocation(memberPeriodTransactions, "principal");
-  const monthlyInterest = sumCollectedAllocation(memberPeriodTransactions, "interest");
-  const monthlyPenalty = sumCollectedAllocation(memberPeriodTransactions, "penalty");
-  const totalGroupShare = (state.members || []).reduce((sum, item) => sum + Math.max(0, calculateMemberLedgerSummary(item, state).shareAmount), 0);
-  const sharePercent = totalGroupShare > 0 ? Number(((Math.max(0, ledger.shareAmount) / totalGroupShare) * 100).toFixed(2)) : 0;
-
-  return {
-    ...ledger,
-    memberLoans,
-    memberActiveLoans,
-    dueRows,
-    dueDate,
-    interestDue,
-    nextDueAmount,
-    monthlySavings,
-    monthlyPrincipal,
-    monthlyInterest,
-    monthlyPenalty,
-    monthlyWithdrawn,
-    monthlyCollections: monthlySavings + monthlyPrincipal + monthlyInterest + monthlyPenalty - monthlyWithdrawn,
-    sharePercent
-  };
-}
-
-function calculateOpeningShareRows(state, amount) {
-  const activeMembers = (state.members || []).filter((member) => member.status !== "Inactive");
-  const totalSavings = activeMembers.reduce((sum, member) => sum + Math.max(0, Number(member.savings || 0)), 0);
-  let remaining = Number(amount || 0);
-
-  return activeMembers.map((member, index) => {
-    const shareAmount = totalSavings > 0
-      ? (index === activeMembers.length - 1 ? Number(remaining.toFixed(2)) : Number(((Number(amount || 0) * Math.max(0, Number(member.savings || 0))) / totalSavings).toFixed(2)))
-      : (index === activeMembers.length - 1 ? Number(remaining.toFixed(2)) : Number((Number(amount || 0) / Math.max(1, activeMembers.length)).toFixed(2)));
-    remaining -= shareAmount;
-    return { memberId: member.id, shareAmount };
-  });
-}
-
-function calculateLegacyGroupOpeningMemberImpact(member, state) {
-  const openingSummary = calculateLegacyGroupOpeningSummary(state, {
-    totalSavings: calculateTotalSavings(getCompletedTransactions(state.transactions || []), state.members || []),
-    activeLoanOutstanding: calculateDerivedLoanOutstanding(state.loans || [], state)
-  });
-  const gainRows = calculateOpeningShareRows(state, openingSummary.groupGain);
-  const expenseRows = calculateOpeningShareRows(state, openingSummary.openingGroupExpense);
-  const gain = gainRows.find((row) => String(row.memberId) === String(member?.id))?.shareAmount ?? 0;
-  const expense = expenseRows.find((row) => String(row.memberId) === String(member?.id))?.shareAmount ?? 0;
-  return { gain, expense };
 }
 
 function getApprovalRecipients(state) {
@@ -2042,312 +1965,6 @@ function rejectSetupChangeInState(state, change, status = "Rejected") {
   };
 }
 
-function calculateMemberLedgerSummary(member, state) {
-  const completedTransactions = getCompletedTransactions(state.transactions || []);
-  const memberTransactions = completedTransactions.filter((transaction) => String(transaction.memberId) === String(member?.id));
-  let savings = memberTransactions
-    .filter((transaction) => transaction.transactionType !== "Group Expense Share")
-    .reduce((sum, transaction) =>
-      sum + Number(transaction.allocation?.savings ?? 0) + Number(transaction.allocation?.excess ?? 0), 0);
-  if (savings === 0 && Number(member?.savings || 0) > 0) {
-    savings = Number(member.savings || 0);
-  }
-  const expense = Math.abs(memberTransactions
-    .filter((transaction) => transaction.transactionType === "Group Expense Share")
-    .reduce((sum, transaction) => sum + Number(transaction.allocation?.savings ?? transaction.amount ?? 0), 0));
-  const withdrawn = Math.abs(memberTransactions
-    .filter((transaction) => transaction.transactionType === "Withdrawal")
-    .reduce((sum, transaction) => sum + Number(transaction.allocation?.savings ?? -Math.abs(transaction.amount ?? 0)), 0));
-  const openingImpact = calculateLegacyGroupOpeningMemberImpact(member, state);
-  const gain = Number(member?.earnedFromGroup ?? member?.groupGain ?? 0) + Number(openingImpact.gain || 0);
-  const totalExpense = expense + Number(openingImpact.expense || 0);
-  const loanOutstanding = (state.loans || [])
-    .filter((loan) => loanBelongsToMember(loan, member) && isOutstandingLoan(loan))
-    .reduce((sum, loan) => sum
-      + calculateDerivedLoanPrincipalOutstanding(loan, state)
-      + Number(loan.interestOutstanding || 0)
-      + Number(loan.penaltyOutstanding || 0), 0);
-  const outstanding = loanOutstanding || Number(member?.loanOutstanding || 0)
-    + Number(member?.interestOutstanding || 0)
-    + Number(member?.penaltyOutstanding || 0);
-  return {
-    savings,
-    expense: totalExpense,
-    withdrawn,
-    gain,
-    shareAmount: savings + gain - totalExpense,
-    outstanding
-  };
-}
-
-function calculateDerivedLoanPrincipalOutstanding(loan, state) {
-  if (!isOutstandingLoan(loan)) return 0;
-  const completedTransactions = getCompletedTransactions(state.transactions || []);
-  const loanStartDate = loan.startDate || loan.distributionDate || "";
-  const principalPaid = completedTransactions
-    .filter((transaction) => loanBelongsToMember(loan, { id: transaction.memberId, fullName: transaction.memberName }))
-    .filter((transaction) => !loanStartDate || String(transaction.transactionDate || "") >= String(loanStartDate))
-    .filter((transaction) => !isMigratedOpeningTransaction(transaction))
-    .reduce((sum, transaction) => sum + Number(transaction.allocation?.principal || 0), 0);
-  const originalAmount = Number(loan.amount || loan.principalOutstanding || 0);
-  if (principalPaid === 0) return Math.max(0, Number(loan.principalOutstanding || originalAmount || 0));
-  return Math.max(0, originalAmount - principalPaid);
-}
-
-function calculateDerivedLoanOutstanding(loans, state) {
-  return (loans || []).filter(isOutstandingLoan).reduce((sum, loan) => sum + calculateDerivedLoanPrincipalOutstanding(loan, state), 0);
-}
-
-function buildOpeningShareRatioRows({ members = [], state, currentMemberId, currentSaving = 0, amount = 0 }) {
-  const activeMembers = members.filter((member) => member.status !== "Inactive");
-  const weightedRows = activeMembers.map((member) => {
-    const summary = calculateMemberLedgerSummary(member, state);
-    const openingShare = Math.max(0, Number(summary.savings || 0) + (String(member.id) === String(currentMemberId) ? Number(currentSaving || 0) : 0));
-    return { member, openingShare };
-  });
-  const totalShare = weightedRows.reduce((sum, row) => sum + row.openingShare, 0);
-  let remaining = Number(amount || 0);
-  return weightedRows.map((row, index) => {
-    const shareAmount = totalShare > 0
-      ? (index === weightedRows.length - 1 ? Number(remaining.toFixed(2)) : Number(((Number(amount || 0) * row.openingShare) / totalShare).toFixed(2)))
-      : (index === weightedRows.length - 1 ? Number(remaining.toFixed(2)) : Number((Number(amount || 0) / Math.max(1, weightedRows.length)).toFixed(2)));
-    remaining -= shareAmount;
-    return { member: row.member, openingShare: row.openingShare, amount: shareAmount };
-  }).filter((row) => Math.abs(row.amount) > 0.009);
-}
-
-function calculateDerivedOpeningSurplus({ state, currentSaving = 0, currentLoan = 0, groupBankBalance = 0, groupExpense = 0 }) {
-  const completedTransactions = getCompletedTransactions(state.transactions || []);
-  const existingSavings = calculateTotalSavings(completedTransactions, state.members);
-  const existingLoanOutstanding = calculateDerivedLoanOutstanding(state.loans || [], state);
-  return Number(groupBankBalance || 0)
-    + existingLoanOutstanding
-    + Number(currentLoan || 0)
-    - existingSavings
-    - Number(currentSaving || 0)
-    + Number(groupExpense || 0);
-}
-
-function configuredNumber(primary, fallback, defaultValue = 0) {
-  const hasPrimary = primary !== null && primary !== undefined && primary !== "";
-  const primaryNumber = Number(primary);
-  if (hasPrimary && Number.isFinite(primaryNumber)) return primaryNumber;
-  const hasFallback = fallback !== null && fallback !== undefined && fallback !== "";
-  const fallbackNumber = Number(fallback);
-  if (hasFallback && Number.isFinite(fallbackNumber)) return fallbackNumber;
-  return defaultValue;
-}
-
-function getEffectiveMemberSetup(member, group = {}) {
-  return {
-    monthlySaving: configuredNumber(member?.customSavingAmount ?? member?.monthlySaving, group.monthlySaving, 0),
-    interestRate: configuredNumber(member?.interestRate, group.interestRate, 0),
-    loanTenureMonths: configuredNumber(member?.loanTenureMonths, group.loanTenureMonths, 0),
-    loanLimit: configuredNumber(member?.loanLimit, group.maximumLoanLimit, 0),
-    loanDueDay: configuredNumber(member?.loanDueDay, group.loanDueDay, 1),
-    interestType: member?.interestType || group.interestType || "Reducing"
-  };
-}
-
-function completedTransactionsForMember(state, memberId, untilDate = null) {
-  return getCompletedTransactions(state.transactions || [])
-    .filter((transaction) => String(transaction.memberId) === String(memberId))
-    .filter((transaction) => !untilDate || String(transaction.transactionDate || "") <= String(untilDate));
-}
-
-function allocationPaidForMember(state, memberId, bucket, { fromDate = null, untilDate = null } = {}) {
-  return completedTransactionsForMember(state, memberId, untilDate)
-    .filter((transaction) => !fromDate || String(transaction.transactionDate || "") >= String(fromDate))
-    .filter((transaction) => transaction.transactionType !== "Waiver")
-    .filter((transaction) => !isMigratedOpeningTransaction(transaction))
-    .reduce((sum, transaction) => sum + Math.max(0, Number(transaction.allocation?.[bucket] || 0)), 0);
-}
-
-function allocationWaivedForMember(state, memberId, bucket, { untilDate = null } = {}) {
-  return completedTransactionsForMember(state, memberId, untilDate)
-    .filter((transaction) => transaction.transactionType === "Waiver")
-    .reduce((sum, transaction) => sum + Math.abs(Math.min(0, Number(transaction.allocation?.[bucket] || 0))), 0);
-}
-
-function getLoanInterestForDate(loan, member, state, dateValue) {
-  const group = state.groups?.[0] ?? {};
-  const setup = getEffectiveMemberSetup(member, group);
-  const targetDate = new Date(dateValue || new Date());
-  const disbursementDate = new Date(loan.startDate || loan.distributionDate || targetDate);
-  const startDate = group.loanInterestStartMode === "fullMonth"
-    ? new Date(targetDate.getFullYear(), targetDate.getMonth(), 1)
-    : disbursementDate;
-  const days = group.loanInterestStartMode === "fullMonth"
-    ? 30
-    : Math.max(0, Math.ceil((targetDate - startDate) / (1000 * 60 * 60 * 24)));
-  if (days <= 0 || Number(loan.principalOutstanding || 0) <= 0) return 0;
-  return calculateLoanInterest({
-    principalOutstanding: Number(loan.principalOutstanding || 0),
-    originalPrincipal: Number(loan.amount || loan.principalOutstanding || 0),
-    monthlyRate: configuredNumber(setup.interestRate, loan.rate, 0),
-    days,
-    interestType: setup.interestType
-  });
-}
-
-function calculateMemberLoanInterestDueDetails(member, state, dueDate, paymentUntilDate = dueDate) {
-  const group = state.groups?.[0] ?? {};
-  const setup = getEffectiveMemberSetup(member, group);
-  const paymentUntilIso = toIsoDateValue(paymentUntilDate);
-  const activeLoans = (state.loans || [])
-    .filter((loan) => loanBelongsToMember(loan, member) && isOutstandingLoan(loan))
-    .sort((a, b) => String(a.startDate || a.distributionDate || "").localeCompare(String(b.startDate || b.distributionDate || "")));
-  const rawRows = activeLoans.map((loan) => {
-    const start = new Date(loan.startDate || loan.distributionDate || new Date());
-    const days = Math.max(0, Math.ceil((dueDate - start) / (1000 * 60 * 60 * 24)));
-    const calculated = days > 0 ? calculateLoanInterest({
-      principalOutstanding: Number(loan.principalOutstanding || 0),
-      originalPrincipal: Number(loan.amount || loan.principalOutstanding || 0),
-      monthlyRate: configuredNumber(setup.interestRate, loan.rate, 0),
-      days,
-      interestType: setup.interestType
-    }) : 0;
-    return {
-      loan,
-      calculated,
-      migratedInterest: Number(loan.interestOutstanding || 0),
-      dueBeforePayments: calculated + Number(loan.interestOutstanding || 0),
-      due: calculated + Number(loan.interestOutstanding || 0)
-    };
-  });
-  let paid = allocationPaidForMember(state, member?.id, "interest", { untilDate: paymentUntilIso });
-  let waived = allocationWaivedForMember(state, member?.id, "interest", { untilDate: paymentUntilIso });
-  return rawRows.map((row) => {
-    const paidHere = Math.min(row.due, paid);
-    row.due -= paidHere;
-    paid -= paidHere;
-    const waivedHere = Math.min(row.due, waived);
-    row.due -= waivedHere;
-    waived -= waivedHere;
-    return { ...row, paidApplied: paidHere, waivedApplied: waivedHere, due: Math.max(0, row.due) };
-  });
-}
-
-function getCurrentMember(state, actor) {
-  return (state.members || []).find((member) =>
-    String(member.id) === String(actor?.memberId)
-    || (member.email && actor?.email && member.email.toLowerCase() === actor.email.toLowerCase())
-    || (member.username && actor?.username && member.username.toLowerCase() === actor.username.toLowerCase())
-  ) ?? state.members?.[0];
-}
-
-function isDateInPeriod(dateValue, period) {
-  if (!dateValue || !period) return false;
-  return dateValue >= period.startDate && dateValue <= period.endDate;
-}
-
-function getDashboardPeriod(state) {
-  const openPeriodValue = getOpenPeriod(state.periods || []);
-  const fallbackPeriod = getCurrentMonthPeriod(state.periods || []);
-  const today = new Date();
-  return openPeriodValue ?? fallbackPeriod ?? {
-    name: today.toLocaleString("default", { month: "long", year: "numeric" }),
-    startDate: `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`,
-    endDate: `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()).padStart(2, "0")}`
-  };
-}
-
-function getLoanDueDate(group) {
-  const today = new Date();
-  const dueDay = Math.min(28, Math.max(1, Number(group?.loanDueDay || 1)));
-  const candidate = new Date(today.getFullYear(), today.getMonth(), dueDay);
-  if (candidate < today) {
-    candidate.setMonth(candidate.getMonth() + 1);
-  }
-  return candidate;
-}
-
-function calculateMemberLoanInterestDue(member, state, dueDate, paymentUntilDate = dueDate) {
-  return calculateMemberLoanInterestDueDetails(member, state, dueDate, paymentUntilDate)
-    .reduce((sum, row) => sum + Number(row.due || 0), 0);
-}
-
-function getPeriodDueDate(group, period) {
-  const base = new Date(period?.startDate || new Date());
-  const dueDay = Math.min(28, Math.max(1, Number(group?.loanDueDay || 1)));
-  return new Date(base.getFullYear(), base.getMonth(), dueDay);
-}
-
-function getDuePeriods(state) {
-  const today = new Date();
-  const group = state.groups?.[0] ?? {};
-  const nextDue = getLoanDueDate(group);
-  const periods = (state.periods || [])
-    .filter((period) => period?.startDate)
-    .filter((period) => new Date(period.startDate) <= nextDue)
-    .sort((a, b) => String(a.startDate).localeCompare(String(b.startDate)));
-  if (periods.length > 0) return periods;
-  return [getDashboardPeriod(state)].filter(Boolean).map((period) => ({
-    ...period,
-    id: period.id ?? `due_${today.getFullYear()}_${today.getMonth() + 1}`
-  }));
-}
-
-function calculatePendingDues(state, actor = null, memberOnly = false) {
-  const group = state.groups?.[0] ?? {};
-  const completedTransactions = getCompletedTransactions(state.transactions || []);
-  const dismissedDueIds = new Set((state.dismissedPendingDues || []).map(String));
-  const groupStartDate = new Date(group.createdDate || group.startDate || group.creationDate || "1900-01-01");
-  groupStartDate.setHours(0, 0, 0, 0);
-  const today = new Date();
-  today.setHours(23, 59, 59, 999);
-  const targetMember = memberOnly ? getCurrentMember(state, actor) : null;
-  const members = (state.members || [])
-    .filter((member) => member.status !== "Inactive")
-    .filter((member) => !targetMember || String(member.id) === String(targetMember.id));
-  const periods = getDuePeriods(state);
-
-  return periods.flatMap((period) => {
-    const dueDate = getPeriodDueDate(group, period);
-    if (dueDate < groupStartDate) return [];
-    const dueDateIso = toIsoDateValue(dueDate);
-    const periodEnd = new Date(period.endDate || dueDate);
-    const paymentCutoff = periodEnd < today ? periodEnd : today;
-    const paymentCutoffIso = toIsoDateValue(paymentCutoff);
-    return members.map((member) => {
-      const setup = getEffectiveMemberSetup(member, group);
-      const transactions = completedTransactions.filter((transaction) =>
-        String(transaction.memberId) === String(member.id)
-        && isDateInPeriod(transaction.transactionDate, period)
-      );
-      const savingSetup = setup.monthlySaving;
-      const savingPaid = transactions.reduce((sum, transaction) =>
-        sum + Number(transaction.allocation?.savings || 0) + Number(transaction.allocation?.excess || 0), 0);
-      const savingDue = Math.max(0, savingSetup - savingPaid);
-      const memberLoans = (state.loans || []).filter((loan) =>
-        loanBelongsToMember(loan, member)
-        && isOutstandingLoan(loan)
-        && new Date(loan.startDate || period.startDate) <= dueDate
-      );
-      const outstandingPrincipal = memberLoans.reduce((sum, loan) => sum + Number(loan.principalOutstanding || 0), 0);
-      const interestDue = calculateMemberLoanInterestDue(member, state, dueDate, paymentCutoff);
-      const allPenaltyPaidTillCutoff = allocationPaidForMember(state, member.id, "penalty", { untilDate: paymentCutoffIso });
-      const allPenaltyWaivedTillCutoff = allocationWaivedForMember(state, member.id, "penalty", { untilDate: paymentCutoffIso });
-      const openingPenaltyDue = Number(member.penaltyOutstanding || 0)
-        + memberLoans.reduce((sum, loan) => sum + Number(loan.penaltyOutstanding || 0), 0);
-      const penaltyDue = Math.max(0, openingPenaltyDue + (dueDate < today && (savingDue + interestDue) > 0 ? Number(group.penaltyAmount || 0) : 0) - allPenaltyPaidTillCutoff - allPenaltyWaivedTillCutoff);
-      const totalDue = savingDue + interestDue + penaltyDue;
-      return {
-        id: `${period.id}_${member.id}`,
-        periodName: period.name,
-        memberId: member.id,
-        memberName: member.fullName,
-        dueDate: dueDateIso,
-        savingDue,
-        outstandingPrincipal,
-        interestDue,
-        penaltyDue,
-        totalDue
-      };
-    }).filter((row) => row.totalDue > 0 && !dismissedDueIds.has(String(row.id)));
-  });
-}
-
 function metric(label, value, Icon, details = []) {
   return { label, value, Icon, details };
 }
@@ -2443,11 +2060,6 @@ function saveHiddenGroupIds(actor, ids) {
   } catch {
     // Hiding groups is a convenience preference; the app can continue without storage.
   }
-}
-
-function loanBelongsToMember(loan, member) {
-  if (!loan || !member) return false;
-  return loan.memberId === member.id || loan.memberName === member.fullName;
 }
 
 function GroupSelectionPage({ state, setState, selectedGroupId, setSelectedGroupId, actor, setConfirmDialog, setNotification }) {
@@ -2879,24 +2491,27 @@ function Members({ state, setState, actor, setConfirmDialog, setNotification, on
       </FormCard>
       <Table
         headers={["Member", "Email", "Mobile", "Username", "Savings", "Loan", "Status", ""]}
-        rows={state.members.map((member) => [
-          member.fullName,
-          member.email,
-          member.mobile,
-          member.username,
-          currency.format(member.savings),
-          currency.format(member.loanOutstanding),
-          member.status,
-          <button
-            key={`preview-${member.id}`}
-            type="button"
-            className="icon-button"
-            onClick={() => onPreviewMember?.(member)}
-            aria-label={`View ${member.fullName}`}
-          >
-            <Eye size={16} />
-          </button>
-        ])}
+        rows={state.members.map((member) => {
+          const summary = calculateMemberFinanceSummary(member, state, getDashboardPeriod(state), actor);
+          return [
+            member.fullName,
+            member.email,
+            member.mobile,
+            member.username,
+            currency.format(summary.savings),
+            currency.format(summary.outstanding),
+            member.status,
+            <button
+              key={`preview-${member.id}`}
+              type="button"
+              className="icon-button"
+              onClick={() => onPreviewMember?.(member)}
+              aria-label={`View ${member.fullName}`}
+            >
+              <Eye size={16} />
+            </button>
+          ];
+        })}
       />
     </Page>
   );
@@ -3258,6 +2873,45 @@ function SetupPage({ state, setState, actor, selectedGroup, initialSetupTab = "g
   const [legacyExpenseLines, setLegacyExpenseLines] = useState([{ category: "Opening expense", amount: "", remarks: "" }]);
   const legacyExpenseTotal = legacyExpenseLines.reduce((sum, line) => sum + Number(line.amount || 0), 0);
   const isLegacyGroupExpense = false;
+  const [shareCalculator, setShareCalculator] = useState({
+    remainingMoney: "",
+    outstandingLoan: "",
+    perMemberSaving: "",
+    numberOfMembers: state.members?.length ? String(state.members.length) : ""
+  });
+  const [settlementCalculator, setSettlementCalculator] = useState({
+    memberShareBase: "",
+    totalMemberShareBase: "",
+    profitPool: "",
+    interestAmount: "",
+    outstandingLoan: "",
+    penaltyAmount: "",
+    otherDeduction: "",
+    otherAddition: ""
+  });
+  const numberOrZero = (value) => Number(value || 0);
+  const memberCountForShare = Math.max(0, Math.floor(Number(shareCalculator.numberOfMembers || 0)));
+  const shareTotalGroupValue = numberOrZero(shareCalculator.remainingMoney) + numberOrZero(shareCalculator.outstandingLoan);
+  const hasPerMemberSaving = shareCalculator.perMemberSaving !== "";
+  const expectedMemberSaving = hasPerMemberSaving
+    ? numberOrZero(shareCalculator.perMemberSaving)
+    : (memberCountForShare > 0 ? shareTotalGroupValue / memberCountForShare : 0);
+  const expectedTotalSavings = expectedMemberSaving * memberCountForShare;
+  const estimatedGroupGain = hasPerMemberSaving ? shareTotalGroupValue - expectedTotalSavings : 0;
+  const estimatedPerMemberGain = memberCountForShare > 0 ? estimatedGroupGain / memberCountForShare : 0;
+  const estimatedPerMemberShare = memberCountForShare > 0 ? expectedMemberSaving + estimatedPerMemberGain : 0;
+  const settlementMemberShareBase = numberOrZero(settlementCalculator.memberShareBase);
+  const settlementTotalShareBase = numberOrZero(settlementCalculator.totalMemberShareBase);
+  const settlementSharePercent = settlementTotalShareBase > 0 ? (settlementMemberShareBase / settlementTotalShareBase) * 100 : 0;
+  const settlementProfitShare = numberOrZero(settlementCalculator.profitPool) * (settlementSharePercent / 100);
+  const settlementDeductions = numberOrZero(settlementCalculator.interestAmount)
+    + numberOrZero(settlementCalculator.outstandingLoan)
+    + numberOrZero(settlementCalculator.penaltyAmount)
+    + numberOrZero(settlementCalculator.otherDeduction);
+  const settlementFinalWithdrawable = settlementMemberShareBase
+    + settlementProfitShare
+    + numberOrZero(settlementCalculator.otherAddition)
+    - settlementDeductions;
 
   function updateLegacyExpenseLine(index, key, value) {
     setLegacyExpenseLines((current) => current.map((line, lineIndex) =>
@@ -3869,7 +3523,7 @@ function SetupPage({ state, setState, actor, selectedGroup, initialSetupTab = "g
     { key: "roles", label: "Roles", description: "Admins", icon: Users },
     { key: "loan", label: "Loans", description: "Interest", icon: IndianRupee },
     { key: "period", label: "Periods", description: "Month close", icon: CalendarCheck },
-    { key: "legacy", label: "Legacy", description: "Opening data", icon: ListChecks }
+    { key: "calculator", label: "Calculator", description: "Shares", icon: Calculator }
   ];
 
   return (
@@ -4266,6 +3920,113 @@ function SetupPage({ state, setState, actor, selectedGroup, initialSetupTab = "g
                 )}
               </div>
             </Section>
+          )}
+
+          {financialTab === "calculator" && (
+            <div className="calculator-grid">
+              <Section title="Member share calculator">
+                <p className="section-note">Use this for quick estimation only. All fields are optional except number of members. It does not save anything.</p>
+                <div className="form-grid">
+                  <Field
+                    label="Remaining money in account"
+                    type="number"
+                    value={shareCalculator.remainingMoney}
+                    onChange={(value) => setShareCalculator((current) => ({ ...current, remainingMoney: value }))}
+                  />
+                  <Field
+                    label="Outstanding loan"
+                    type="number"
+                    value={shareCalculator.outstandingLoan}
+                    onChange={(value) => setShareCalculator((current) => ({ ...current, outstandingLoan: value }))}
+                  />
+                  <Field
+                    label="Per member monthly saving"
+                    type="number"
+                    value={shareCalculator.perMemberSaving}
+                    onChange={(value) => setShareCalculator((current) => ({ ...current, perMemberSaving: value }))}
+                  />
+                  <Field
+                    label="Number of members"
+                    type="number"
+                    required
+                    value={shareCalculator.numberOfMembers}
+                    onChange={(value) => setShareCalculator((current) => ({ ...current, numberOfMembers: value }))}
+                  />
+                </div>
+                <MetricGrid
+                  metrics={[
+                    metric("Total amount", currency.format(shareTotalGroupValue), WalletCards, ["Remaining account money + outstanding loan"]),
+                    metric("Per member share", currency.format(estimatedPerMemberShare), Users, [`${memberCountForShare || 0} member(s)`]),
+                    metric("Group gain", currency.format(estimatedGroupGain), WalletCards, ["Total amount - total member savings"]),
+                    metric("Per member gain", currency.format(estimatedPerMemberGain), IndianRupee, ["Group gain divided by members"]),
+                    metric("Check total", currency.format(estimatedPerMemberShare * memberCountForShare), CheckCircle2, ["Per member share x members"])
+                  ]}
+                />
+              </Section>
+
+              <Section title="Member full settlement calculator">
+                <p className="section-note">Enter the member values to estimate final settlement. Positive additions increase withdrawal; loan, interest, penalty and deductions reduce it.</p>
+                <div className="form-grid">
+                  <Field
+                    label="Member share amount"
+                    type="number"
+                    value={settlementCalculator.memberShareBase}
+                    onChange={(value) => setSettlementCalculator((current) => ({ ...current, memberShareBase: value }))}
+                  />
+                  <Field
+                    label="Total group share amount"
+                    type="number"
+                    value={settlementCalculator.totalMemberShareBase}
+                    onChange={(value) => setSettlementCalculator((current) => ({ ...current, totalMemberShareBase: value }))}
+                  />
+                  <Field
+                    label="Profit pool / group gain"
+                    type="number"
+                    value={settlementCalculator.profitPool}
+                    onChange={(value) => setSettlementCalculator((current) => ({ ...current, profitPool: value }))}
+                  />
+                  <Field
+                    label="Interest amount"
+                    type="number"
+                    value={settlementCalculator.interestAmount}
+                    onChange={(value) => setSettlementCalculator((current) => ({ ...current, interestAmount: value }))}
+                  />
+                  <Field
+                    label="Outstanding loan"
+                    type="number"
+                    value={settlementCalculator.outstandingLoan}
+                    onChange={(value) => setSettlementCalculator((current) => ({ ...current, outstandingLoan: value }))}
+                  />
+                  <Field
+                    label="Penalty amount"
+                    type="number"
+                    value={settlementCalculator.penaltyAmount}
+                    onChange={(value) => setSettlementCalculator((current) => ({ ...current, penaltyAmount: value }))}
+                  />
+                  <Field
+                    label="Other deduction"
+                    type="number"
+                    value={settlementCalculator.otherDeduction}
+                    onChange={(value) => setSettlementCalculator((current) => ({ ...current, otherDeduction: value }))}
+                  />
+                  <Field
+                    label="Other addition"
+                    type="number"
+                    value={settlementCalculator.otherAddition}
+                    onChange={(value) => setSettlementCalculator((current) => ({ ...current, otherAddition: value }))}
+                  />
+                </div>
+                <MetricGrid
+                  metrics={[
+                    metric("Share percentage", `${settlementSharePercent.toFixed(2)}%`, WalletCards, ["Member share / total group share"]),
+                    metric("Profit share", currency.format(settlementProfitShare), WalletCards, ["Profit pool x share percentage"]),
+                    metric("Interest amount", currency.format(numberOrZero(settlementCalculator.interestAmount)), IndianRupee),
+                    metric("Outstanding loan", currency.format(numberOrZero(settlementCalculator.outstandingLoan)), IndianRupee),
+                    metric("Final withdrawable amount", currency.format(settlementFinalWithdrawable), CheckCircle2, ["Share + profit + additions - deductions"])
+                  ]}
+                />
+              </Section>
+            </div>
           )}
 
           {financialTab === "legacy" && (
@@ -5758,10 +5519,6 @@ function getSelectedGroupState(state, selectedGroupId, includeAllGroups = false)
   };
 }
 
-function isCompletedFinancialStatus(status) {
-  return ["COMPLETED", "APPROVED"].includes(String(status ?? "").toUpperCase());
-}
-
 function isPendingFinancialStatus(status) {
   return String(status ?? "").toUpperCase() === "PENDING";
 }
@@ -5781,10 +5538,6 @@ function isWithinPastDays(dateValue, days = 60) {
 function isPendingOrRecentCompleted(item, dateField = "transactionDate", days = 60) {
   return isPendingFinancialStatus(item?.approvalStatus)
     || (isCompletedFinancialStatus(item?.approvalStatus) && isWithinPastDays(item?.[dateField], days));
-}
-
-function getCompletedTransactions(transactions = []) {
-  return transactions.filter((transaction) => isCompletedFinancialStatus(transaction.approvalStatus));
 }
 
 function correctionChildrenFor(transactions = [], parentId) {
@@ -6506,6 +6259,183 @@ function ContactSupport({ state, setState, actor, setNotification }) {
               )}
               {dispute.attachment_name && <p className="section-note">Attachment: {dispute.attachment_name}</p>}
             </article>
+          ))}
+        </div>
+      </Section>
+    </Page>
+  );
+}
+
+function buildFinanceAgentContext(state, actor) {
+  const period = getDashboardPeriod(state);
+  const group = state.groups?.[0] ?? {};
+  const groupSummary = calculateGroupFinanceSummary(state, period);
+  const isMemberOnly = actor?.role === roles.MEMBER;
+  const visibleMembers = isMemberOnly
+    ? [getCurrentMember(state, actor)].filter(Boolean)
+    : (state.members || []);
+  const memberSummaries = visibleMembers.map((member) => {
+    const summary = calculateMemberFinanceSummary(member, state, period, actor);
+    return {
+      id: member.id,
+      name: member.fullName,
+      status: member.status,
+      savings: summary.savings,
+      shareAmount: summary.shareAmount,
+      sharePercent: summary.sharePercent,
+      gain: summary.gain,
+      expense: summary.expense,
+      loanOutstanding: summary.outstanding,
+      nextDueAmount: summary.nextDueAmount,
+      interestDue: summary.interestDue,
+      monthlySavings: summary.monthlySavings,
+      monthlyPrincipal: summary.monthlyPrincipal,
+      monthlyInterest: summary.monthlyInterest,
+      monthlyPenalty: summary.monthlyPenalty,
+      activeLoans: summary.memberActiveLoans.length
+    };
+  });
+
+  return {
+    group: {
+      id: group.id,
+      name: group.name,
+      code: group.code,
+      role: actor?.role,
+      period: {
+        name: period.name,
+        startDate: period.startDate,
+        endDate: period.endDate
+      }
+    },
+    fieldRules: financeFieldDictionary,
+    groupSummary: {
+      totalSavings: groupSummary.totalSavings,
+      monthlyCollections: groupSummary.monthlyCollections,
+      monthlySavings: groupSummary.monthlySavings,
+      monthlyPrincipal: groupSummary.monthlyPrincipal,
+      monthlyInterest: groupSummary.monthlyInterest,
+      monthlyPenalty: groupSummary.monthlyPenalty,
+      monthlyWithdrawn: groupSummary.monthlyWithdrawn,
+      totalActiveLoan: groupSummary.totalActiveLoan,
+      totalExpenses: groupSummary.totalExpenses,
+      totalWithdrawn: groupSummary.totalWithdrawn,
+      groupGain: groupSummary.groupGain,
+      collectedGain: groupSummary.collectedGain,
+      remainingBalance: groupSummary.remainingBalance,
+      activeLoanCount: groupSummary.activeLoans.length,
+      legacyOpening: groupSummary.legacyOpening
+    },
+    memberSummaries,
+    pendingDues: calculatePendingDues(state, actor, isMemberOnly).map((row) => ({
+      memberName: row.memberName,
+      periodName: row.periodName,
+      dueDate: row.dueDate,
+      savingDue: row.savingDue,
+      outstandingPrincipal: row.outstandingPrincipal,
+      interestDue: row.interestDue,
+      penaltyDue: row.penaltyDue,
+      totalDue: row.totalDue
+    })),
+    recentTransactions: getCompletedTransactions(state.transactions || [])
+      .slice(-20)
+      .map((transaction) => ({
+        date: transaction.transactionDate,
+        memberName: transaction.memberName,
+        type: transaction.transactionType,
+        amount: transaction.amount,
+        allocation: transaction.allocation
+      }))
+  };
+}
+
+function FinanceAgent({ state, actor, setNotification }) {
+  const [messages, setMessages] = useState([
+    {
+      role: "assistant",
+      content: "Ask me about savings, loans, pending dues, migrated balances, group gain, remaining balance, or why a dashboard number is showing."
+    }
+  ]);
+  const [question, setQuestion] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function askAgent(event) {
+    event.preventDefault();
+    const trimmedQuestion = question.trim();
+    if (!trimmedQuestion) return;
+
+    const nextMessages = [...messages, { role: "user", content: trimmedQuestion }];
+    setMessages(nextMessages);
+    setQuestion("");
+    setLoading(true);
+
+    try {
+      const response = await repository.askFinanceAgent({
+        question: trimmedQuestion,
+        messages: nextMessages,
+        context: buildFinanceAgentContext(state, actor)
+      });
+      setMessages((current) => [...current, { role: "assistant", content: response.answer || "No answer returned." }]);
+    } catch (error) {
+      const message = `Unable to reach AI Agent: ${error.message}`;
+      setMessages((current) => [...current, { role: "assistant", content: message }]);
+      setNotification?.({ type: "error", message, details: serializeError(error) });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const sampleQuestions = [
+    "Why is remaining balance different from total savings?",
+    "Which members have pending dues?",
+    "Explain migrated savings, interest and penalty in this group.",
+    "How is group gain calculated?"
+  ];
+
+  return (
+    <Page title="AI Agent" subtitle="Read-only finance assistant for dashboard formulas, dues, savings and loans" action={null}>
+      <Section title="Finance Assistant">
+        <div className="chat-window ai-agent-window">
+          <div className="chat-meta">
+            <strong>Context</strong>
+            <span className="pill">Read-only</span>
+          </div>
+          <div className="chat-list">
+            {messages.map((message, index) => (
+              <div className={`chat-bubble ${message.role === "user" ? "chat-sent" : "chat-reply"}`} key={`${message.role}-${index}`}>
+                <small>{message.role === "user" ? "You" : "AI Agent"}</small>
+                <p>{message.content}</p>
+              </div>
+            ))}
+            {loading && (
+              <div className="chat-bubble chat-waiting">
+                <small>AI Agent</small>
+                <p>Thinking through the finance context...</p>
+              </div>
+            )}
+          </div>
+          <form className="ai-agent-form" onSubmit={askAgent}>
+            <label className="field ai-agent-input">
+              <span>Ask a question</span>
+              <textarea
+                value={question}
+                onChange={(event) => setQuestion(event.target.value)}
+                rows={3}
+                placeholder="Example: Why is loan repaid showing different from principal collected?"
+              />
+            </label>
+            <button className="primary-button" type="submit" disabled={loading || !question.trim()}>
+              {loading ? "Asking..." : "Ask AI Agent"}
+            </button>
+          </form>
+        </div>
+      </Section>
+      <Section title="Suggested questions">
+        <div className="chip-row">
+          {sampleQuestions.map((item) => (
+            <button key={item} type="button" className="secondary-button" onClick={() => setQuestion(item)}>
+              {item}
+            </button>
           ))}
         </div>
       </Section>
@@ -7458,7 +7388,7 @@ function summarizeMemberCollectionRows(state, from, to, includeLoanColumns = fal
     (state.loans || []).forEach((loan) => {
       const row = rowByMemberId.get(String(loan.memberId));
       if (!row) return;
-      row["Loan outstanding"] += Number(loan.principalOutstanding || 0) + Number(loan.interestOutstanding || 0) + Number(loan.penaltyOutstanding || 0);
+      row["Loan outstanding"] += calculateLoanOutstandingWithDues(loan, state);
     });
   }
 
@@ -7491,7 +7421,7 @@ function buildMigrationBackupReportRows(state) {
       "Member name": member.fullName,
       "Username": member.username,
       "Share amount hold by the member excluding principle amount": summary.savings + summary.gain - summary.expense,
-      "Outsatnding principle loan amount": memberLoans.reduce((sum, loan) => sum + Number(loan.principalOutstanding || 0), 0),
+      "Outsatnding principle loan amount": memberLoans.reduce((sum, loan) => sum + calculateDerivedLoanPrincipalOutstanding(loan, state), 0),
       "Interest pending to be paid": memberLoans.reduce((sum, loan) => sum + Number(loan.interestOutstanding || 0), 0),
       "Penalty pending to be paid": memberLoans.reduce((sum, loan) => sum + Number(loan.penaltyOutstanding || 0), 0)
     };
@@ -7580,7 +7510,7 @@ function Page({ title, subtitle, action, children }) {
     <section className="page">
       <div className="page-heading">
         <div>
-          <h2>{title}</h2>
+          <h2>{bilingual(title)}</h2>
           <p>{subtitle}</p>
         </div>
         <div className="page-actions">
@@ -7606,7 +7536,7 @@ function MetricGrid({ metrics }) {
         return (
         <article className="metric-card" key={metricItem.label}>
           <Icon size={21} />
-          <span>{metricItem.label}</span>
+          <span>{bilingual(metricItem.label)}</span>
           <strong>{metricItem.value}</strong>
           {metricItem.details?.length > 0 && (
             <small className="metric-detail">{metricItem.details.join(" • ")}</small>
@@ -7621,7 +7551,7 @@ function MetricGrid({ metrics }) {
 function Section({ title, children }) {
   return (
     <section className="section">
-      <h3>{title}</h3>
+      <h3>{bilingual(title)}</h3>
       {children}
     </section>
   );
@@ -7630,7 +7560,7 @@ function Section({ title, children }) {
 function FormCard({ title, onSubmit, children, hideSubmit }) {
   return (
     <section className="section">
-      <h3>{title}</h3>
+      <h3>{bilingual(title)}</h3>
       <form className="form-grid" onSubmit={onSubmit}>
         {children}
         {!hideSubmit && <button className="primary-button" type="submit">Save</button>}
@@ -7642,7 +7572,7 @@ function FormCard({ title, onSubmit, children, hideSubmit }) {
 function Field({ label, value, onChange, type = "text", error, required = false, disabled = false }) {
   return (
     <label className="field">
-      <span>{label}{required ? " *" : ""}</span>
+      <span>{bilingual(label)}{required ? " *" : ""}</span>
       <input
         type={type}
         value={value ?? ""}
@@ -7660,7 +7590,7 @@ function Field({ label, value, onChange, type = "text", error, required = false,
 function SelectField({ label, value, onChange, options, error, required = false }) {
   return (
     <label className="field">
-      <span>{label}{required ? " *" : ""}</span>
+      <span>{bilingual(label)}{required ? " *" : ""}</span>
       <select value={value} onChange={(event) => onChange(event.target.value)}>
         {options.map((option) => {
           const item = typeof option === "string" ? { label: option, value: option } : option;
@@ -7686,7 +7616,7 @@ function Table({ headers, rows }) {
     <div className="table-wrap">
       <table>
         <thead>
-          <tr>{headers.map((header) => <th key={header}>{header}</th>)}</tr>
+          <tr>{headers.map((header) => <th key={header}>{bilingual(header)}</th>)}</tr>
         </thead>
         <tbody>
           {rows.length === 0 ? (
@@ -7748,7 +7678,7 @@ function MemberLoans({ state, actor, setConfirmDialog, setNotification }) {
               <article className="entity-card" key={loan.id}>
                 <h3>{loan.reason}</h3>
                 <p>Amount: {currency.format(loan.amount)}</p>
-                <p>Outstanding: {currency.format(loan.principalOutstanding)}</p>
+                <p>Outstanding: {currency.format(calculateLoanOutstandingWithDues(loan, state))}</p>
                 <p>Status: {loan.status}</p>
               </article>
             ))}

@@ -1391,6 +1391,14 @@ export const repository = {
     }
   },
 
+  async askFinanceAgent(payload) {
+    try {
+      return await invokeFunctionJson("finance-agent", payload);
+    } catch (error) {
+      throw describeFunctionError(error, "finance-agent");
+    }
+  },
+
   async listTenantData() {
     const client = requireClient();
     const profile = await currentProfile();
