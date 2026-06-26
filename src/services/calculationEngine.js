@@ -36,6 +36,12 @@ export function isExpenseTransactionType(transactionType) {
 }
 
 export function calculateTotalSavings(transactions, members = []) {
+  const hasSavingsLedger = transactions.some((transaction) => {
+    const savingsMovement = Number(transaction.allocation?.savings ?? 0) + Number(transaction.allocation?.excess ?? 0);
+    return savingsMovement !== 0
+      || isSavingsTransactionType(transaction.transactionType)
+      || transaction.transactionType === "Withdrawal";
+  });
   const savingsTotal = transactions
     .reduce((sum, transaction) => {
       const savingsMovement = Number(transaction.allocation?.savings ?? 0) + Number(transaction.allocation?.excess ?? 0);
@@ -48,7 +54,7 @@ export function calculateTotalSavings(transactions, members = []) {
     }, 0);
   const memberSavingsTotal = members.reduce((sum, member) => sum + Number(member.savings || 0), 0);
 
-  return Math.max(savingsTotal, memberSavingsTotal);
+  return hasSavingsLedger ? savingsTotal : memberSavingsTotal;
 }
 
 export function calculateTotalCollected(transactions) {

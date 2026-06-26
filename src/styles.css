@@ -733,6 +733,42 @@ button:disabled {
   line-height: 1.45;
 }
 
+.metric-detail {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  gap: 8px;
+}
+
+.metric-subfield {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(196, 197, 238, 0.14);
+  border-radius: 12px;
+  background: rgba(169, 182, 238, 0.08);
+}
+
+.metric-subfield.full {
+  grid-column: 1 / -1;
+}
+
+.metric-subfield span,
+.metric-subfield strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.metric-subfield span {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.metric-subfield strong {
+  color: var(--ink);
+  font-size: 0.9rem;
+}
+
 .notification-badge {
   position: absolute;
   top: -6px;
@@ -789,10 +825,26 @@ button:disabled {
 .status-row,
 .notification {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   gap: 12px;
   padding: 12px 0;
   border-top: 1px solid var(--line);
+}
+
+.status-row > div {
+  flex: 1 1 150px;
+  min-width: 0;
+}
+
+.status-row strong,
+.status-row p,
+.status-row small {
+  overflow-wrap: anywhere;
+}
+
+.status-row p {
+  margin: 8px 0 0;
 }
 
 .status-row:first-of-type,
@@ -1067,6 +1119,12 @@ td {
   white-space: nowrap;
 }
 
+td {
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 th {
   color: var(--muted);
   font-size: 0.8rem;
@@ -1075,6 +1133,12 @@ th {
 
 tr:last-child td {
   border-bottom: 0;
+}
+
+.empty-table-cell {
+  color: var(--muted);
+  text-align: center;
+  max-width: none;
 }
 
 .allocation {
@@ -1987,12 +2051,29 @@ dt {
   color: #ffffff;
 }
 
+.metric-card .metric-subfield span {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.metric-card .metric-subfield strong {
+  color: #ffffff;
+  font-size: 0.9rem;
+  line-height: 1.25;
+}
+
 .section {
   padding: clamp(20px, 3vw, 30px);
 }
 
 .form-grid {
   gap: 20px;
+}
+
+.single-control-form,
+.report-generate-form {
+  grid-template-columns: minmax(0, 320px) auto;
+  align-items: end;
 }
 
 .field {
@@ -2128,30 +2209,63 @@ td {
     border-radius: 20px;
   }
 
-  .table-wrap table,
-  .table-wrap thead,
-  .table-wrap tbody,
-  .table-wrap tr,
-  .table-wrap th,
-  .table-wrap td {
-    display: block;
+  .table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .table-wrap table {
+    display: table;
+    min-width: 760px;
   }
 
   .table-wrap thead {
-    display: none;
+    display: table-header-group;
+  }
+
+  .table-wrap tbody {
+    display: table-row-group;
   }
 
   .table-wrap tr {
-    margin: 12px;
-    padding: 14px;
-    border: 1px solid rgba(196, 197, 238, 0.16);
-    border-radius: 18px;
-    background: rgba(29, 26, 38, 0.86);
+    display: table-row;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
   }
 
+  .table-wrap th,
   .table-wrap td {
-    border: 0;
-    padding: 8px 0;
+    display: table-cell;
+    padding: 12px 14px;
+    border-bottom: 1px solid rgba(196, 197, 238, 0.12);
+    white-space: nowrap;
+  }
+
+  .status-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .status-row > div {
+    min-width: 0;
+  }
+
+  .status-row p,
+  .status-row strong,
+  .status-row small {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .metric-detail {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .single-control-form,
+  .report-generate-form {
+    grid-template-columns: 1fr;
   }
 
   .ai-agent-form {
@@ -2267,4 +2381,36 @@ button:disabled,
 .field select:disabled {
   background: rgba(255, 255, 255, 0.06);
   color: #b9b5c7;
+}
+
+input,
+select,
+textarea {
+  background-color: #17141f;
+  color: #f8fafc;
+  border-color: rgba(196, 197, 238, 0.32);
+}
+
+input[style],
+select[style],
+textarea[style] {
+  background-color: #17141f !important;
+  color: #f8fafc !important;
+  border-color: rgba(196, 197, 238, 0.32) !important;
+}
+
+.page-actions .secondary-button,
+.modal-buttons .secondary-button,
+.button-row .secondary-button,
+button.secondary-button {
+  background: rgba(169, 182, 238, 0.1);
+  color: #eef0ff;
+  border-color: rgba(196, 197, 238, 0.2);
+}
+
+.page-actions .secondary-button:hover,
+.modal-buttons .secondary-button:hover,
+.button-row .secondary-button:hover,
+button.secondary-button:hover {
+  background: rgba(169, 182, 238, 0.18);
 }
