@@ -48,7 +48,9 @@ import {
   calculateDerivedLoanOutstanding,
   calculateDerivedLoanPrincipalOutstanding,
   calculateDerivedOpeningSurplus,
+  calculateDashboardCards,
   calculateGroupFinanceSummary,
+  calculateMemberDashboardCards,
   calculateMemberFinanceSummary,
   calculateMemberLedgerSummary,
   calculateMemberLoanInterestDue,
@@ -78,6 +80,15 @@ const currency = new Intl.NumberFormat("en-IN", {
 });
 
 const GROUP_EXPENSE_MEMBER_ID = "__GROUP_EXPENSE__";
+const SUPABASE_BOOT_TIMEOUT_MS = 12000;
+
+function withTimeout(promise, ms, label) {
+  let timeoutId;
+  const timeout = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(`${label} timed out. Please check your internet connection and Supabase project status.`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
+}
 
 const bilingualLabels = {
   Dashboard: "डॅशबोर्ड (Dashboard)",
@@ -330,7 +341,7 @@ function App() {
     let active = true;
     async function boot() {
       try {
-        const user = await repository.getSessionUser();
+        const user = await withTimeout(repository.getSessionUser(), SUPABASE_BOOT_TIMEOUT_MS, "Supabase session check");
         if (!active) return;
 
         if (!user) {
@@ -353,7 +364,7 @@ function App() {
           return;
         }
 
-        const tenantData = await repository.listTenantData();
+        const tenantData = await withTimeout(repository.listTenantData(), SUPABASE_BOOT_TIMEOUT_MS, "Tenant data loading");
         if (!active) return;
         if (tenantData.groups?.length > 0) {
           const selectedStillExists = tenantData.groups.some((group) => String(group.id) === String(selectedGroupId));
@@ -370,7 +381,13 @@ function App() {
           navigate("/select-group", { replace: true });
         }
       } catch (error) {
-        if (active) setAppError(error.message);
+        if (active) {
+          setNotification({
+            type: "warning",
+            message: "Supabase is taking too long. Opened cached data instead.",
+            details: serializeError(error)
+          });
+        }
       } finally {
         if (active) setBooting(false);
       }
@@ -429,9 +446,9 @@ function App() {
       }
 
       const signedInUser = credentials.mode === "login"
-        ? await repository.signIn(credentials.values.identifier, credentials.values.password)
-        : await repository.getSessionUser();
-      const tenantData = await repository.listTenantData();
+        ? await withTimeout(repository.signIn(credentials.values.identifier, credentials.values.password), SUPABASE_BOOT_TIMEOUT_MS, "Supabase login")
+        : await withTimeout(repository.getSessionUser(), SUPABASE_BOOT_TIMEOUT_MS, "Supabase session check");
+      const tenantData = await withTimeout(repository.listTenantData(), SUPABASE_BOOT_TIMEOUT_MS, "Tenant data loading");
       setState({ ...tenantData, session: { signedIn: true, user: signedInUser } });
       navigate("/select-group", { replace: true });
       return;
@@ -1655,11 +1672,8 @@ function StatusScreen({ title, message }) {
 function Dashboard({ role, state, actor, forceGroupView = false, memberPortal = false, setConfirmDialog, setNotification }) {
   const navigate = useNavigate();
   const [selectedDashboardMemberId, setSelectedDashboardMemberId] = useState("");
-  const openPeriodValue = getOpenPeriod(state.periods);
   const dashboardPeriod = getDashboardPeriod(state);
-  const openPeriodName = dashboardPeriod.name;
-  const groupSummary = calculateGroupFinanceSummary(state, dashboardPeriod);
-  const groupFields = financeFieldDictionary.group;
+  const dashboardCards = calculateDashboardCards(state, dashboardPeriod).cards;
   const memberFields = financeFieldDictionary.member;
 
   if ((role === roles.MEMBER || memberPortal) && !forceGroupView) {
@@ -1667,7 +1681,9 @@ function Dashboard({ role, state, actor, forceGroupView = false, memberPortal = 
     const member = canChooseMember
       ? (state.members.find((item) => String(item.id) === String(selectedDashboardMemberId)) ?? state.members[0])
       : (getCurrentMember(state, actor) ?? { savings: 0, loanOutstanding: 0, shares: 0, interestOutstanding: 0, penaltyOutstanding: 0 });
-    const memberSummary = calculateMemberFinanceSummary(member, state, dashboardPeriod, actor);
+    const memberDashboard = calculateMemberDashboardCards(member, state, dashboardPeriod, actor);
+    const memberSummary = memberDashboard.summary;
+    const memberCards = memberDashboard.cards;
     const effectiveSetup = getEffectiveMemberSetup(member, state.groups?.[0] ?? {});
     const formatDate = (value) => value
       ? new Date(value).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" })
@@ -1706,12 +1722,40 @@ function Dashboard({ role, state, actor, forceGroupView = false, memberPortal = 
         )}
         <MetricGrid
           metrics={[
-            metric(memberFields.savings.label, currency.format(memberSummary.savings), Users, [`This month: ${currency.format(memberSummary.monthlySavings)}`, `Withdrawn: ${currency.format(memberSummary.withdrawn)}`]),
-            metric(memberFields.monthlyCollections.label, currency.format(memberSummary.monthlyCollections), WalletCards, [`Principal: ${currency.format(memberSummary.monthlyPrincipal)}`, `Interest: ${currency.format(memberSummary.monthlyInterest)}`, `Penalty: ${currency.format(memberSummary.monthlyPenalty)}`, `Withdrawn: ${currency.format(memberSummary.monthlyWithdrawn)}`]),
-            metric(memberFields.shareAmount.label, currency.format(memberSummary.shareAmount), WalletCards, [`Gain: ${currency.format(memberSummary.gain)}`, `Expense: ${currency.format(memberSummary.expense)}`]),
-            metric(memberFields.outstanding.label, currency.format(memberSummary.outstanding), IndianRupee, [`Active loans: ${memberSummary.memberActiveLoans.length}`, `Disbursed till now: ${currency.format(memberSummary.memberLoans.reduce((sum, loan) => sum + Number(loan.amount || 0), 0))}`]),
-            metric(memberFields.nextDueAmount.label, currency.format(memberSummary.nextDueAmount), CalendarCheck, [`Saving due: ${currency.format(memberSummary.dueRows.reduce((sum, row) => sum + Number(row.savingDue || 0), 0))}`, `Interest remaining: ${currency.format(memberSummary.interestDue)}`, `Penalty due: ${currency.format(memberSummary.dueRows.reduce((sum, row) => sum + Number(row.penaltyDue || 0), 0))}`, `Due: ${memberSummary.dueDate.toLocaleDateString("en-IN", { year: "numeric", month: "long", day: "numeric" })}`]),
-            metric(memberFields.sharePercent.label, `${memberSummary.sharePercent ?? 0}%`, WalletCards)
+            metric(memberCards.savings.label, currency.format(memberCards.savings.header ?? 0), Users, [
+              `Savings before withdrawals: ${currency.format(memberCards.savings.subfields.savingsBeforeWithdrawals ?? 0)}`,
+              `Withdrawn savings: ${currency.format(memberCards.savings.subfields.withdrawnSavings ?? 0)}`,
+              `This period savings: ${currency.format(memberCards.savings.subfields.thisPeriodSavings ?? 0)}`
+            ]),
+            metric(memberCards.collectedInPeriod.label, currency.format(memberCards.collectedInPeriod.header ?? 0), WalletCards, [
+              `Savings collected: ${currency.format(memberCards.collectedInPeriod.subfields.savingsCollected ?? 0)}`,
+              `Principal collected: ${currency.format(memberCards.collectedInPeriod.subfields.principalCollected ?? 0)}`,
+              `Interest collected: ${currency.format(memberCards.collectedInPeriod.subfields.interestCollected ?? 0)}`,
+              `Penalty collected: ${currency.format(memberCards.collectedInPeriod.subfields.penaltyCollected ?? 0)}`,
+              `Withdrawn in period: ${currency.format(memberCards.collectedInPeriod.subfields.withdrawnInPeriod ?? 0)}`
+            ]),
+            metric(memberCards.shareAmount.label, currency.format(memberCards.shareAmount.header ?? 0), WalletCards, [
+              `Savings: ${currency.format(memberCards.shareAmount.subfields.savings ?? 0)}`,
+              `Income/Gain share: ${currency.format(memberCards.shareAmount.subfields.incomeGainShare ?? 0)}`,
+              `Expense share: ${currency.format(memberCards.shareAmount.subfields.expenseShare ?? 0)}`
+            ]),
+            metric(memberCards.loanBalance.label, currency.format(memberCards.loanBalance.header ?? 0), IndianRupee, [
+              `Active loans: ${memberCards.loanBalance.subfields.activeLoans ?? 0}`,
+              `Principal outstanding: ${currency.format(memberCards.loanBalance.subfields.principalOutstanding ?? 0)}`,
+              `Interest pending: ${currency.format(memberCards.loanBalance.subfields.interestPending ?? 0)}`,
+              `Penalty pending: ${currency.format(memberCards.loanBalance.subfields.penaltyPending ?? 0)}`,
+              `Disbursed till now: ${currency.format(memberCards.loanBalance.subfields.disbursedTillNow ?? 0)}`
+            ]),
+            metric(memberCards.nextMinimumDue.label, currency.format(memberCards.nextMinimumDue.header ?? 0), CalendarCheck, [
+              `Saving due: ${currency.format(memberCards.nextMinimumDue.subfields.savingDue ?? 0)}`,
+              `Interest due: ${currency.format(memberCards.nextMinimumDue.subfields.interestDue ?? 0)}`,
+              `Penalty due: ${currency.format(memberCards.nextMinimumDue.subfields.penaltyDue ?? 0)}`,
+              `Due: ${memberCards.nextMinimumDue.subfields.dueDate?.toLocaleDateString("en-IN", { year: "numeric", month: "long", day: "numeric" }) ?? "-"}`
+            ]),
+            metric(memberCards.sharePercent.label, `${memberCards.sharePercent.header ?? 0}%`, WalletCards, [
+              `Member share amount: ${currency.format(memberCards.sharePercent.subfields.memberShareAmount ?? 0)}`,
+              `Total group share: ${currency.format(memberCards.sharePercent.subfields.totalGroupShare ?? 0)}`
+            ])
           ]}
         />
         <Section title="Next payment">
@@ -1841,12 +1885,51 @@ function Dashboard({ role, state, actor, forceGroupView = false, memberPortal = 
     <Page title="Group Dashboard" subtitle="Live operating view for collectors, admins, approvers, and members" action={role === roles.MEMBER ? <button type="button" className="secondary-button" onClick={() => navigate("/")}>My Dashboard</button> : null}>
       <MetricGrid
         metrics={[
-          metric(groupFields.totalSavings.label, currency.format(groupSummary.totalSavings), WalletCards, [`Members: ${state.members.length}`, `Active members: ${state.members.filter((member) => member.status !== "Inactive").length}`, `Withdrawn: ${currency.format(groupSummary.totalWithdrawn)}`]),
-          metric(`${groupFields.monthlyCollections.label} ${openPeriodName}`, currency.format(groupSummary.monthlyCollections), WalletCards, [`Savings: ${currency.format(groupSummary.monthlySavings)}`, `Principal collected: ${currency.format(groupSummary.monthlyPrincipal)}`, `Interest collected: ${currency.format(groupSummary.monthlyInterest)}`, `Penalty collected: ${currency.format(groupSummary.monthlyPenalty)}`, `Withdrawn: ${currency.format(groupSummary.monthlyWithdrawn)}`]),
-          metric(groupFields.totalActiveLoan.label, currency.format(groupSummary.totalActiveLoan), IndianRupee, [`Disbursed this month: ${currency.format(groupSummary.monthlyLoanDisbursed)}`, `Loan disbursed till now: ${currency.format(groupSummary.totalLoanDisbursedAmount)}`, `Loan repaid till now: ${currency.format(groupSummary.overallPrincipalCollected)}`]),
-          metric(groupFields.remainingBalance.label, currency.format(groupSummary.remainingBalance), WalletCards, [`Loan outstanding: ${currency.format(groupSummary.totalActiveLoan)}`, `Expense: ${currency.format(groupSummary.totalExpenses)}`, `Gain: ${currency.format(groupSummary.groupGain)}`, `Opening balance: ${currency.format(groupSummary.legacyOpening.openingBankBalance)}`, `Savings: ${currency.format(groupSummary.totalSavings)}`]),
-          metric("Active loans", String(groupSummary.activeLoans.length), Users, [`Closed till now: ${groupSummary.closedLoanCount}`, `Activated this month: ${groupSummary.activatedThisMonth}`, `Disbursed till now: ${groupSummary.totalLoanDisbursedCount}`]),
-          metric("Open period", openPeriodValue?.name ?? "None", ShieldCheck)
+          metric(dashboardCards.totalSavings.label, currency.format(dashboardCards.totalSavings.header ?? 0), WalletCards, [
+            `Members: ${dashboardCards.totalSavings.subfields.members ?? 0}`,
+            `Active members: ${dashboardCards.totalSavings.subfields.activeMembers ?? 0}`,
+            `Active member savings: ${currency.format(dashboardCards.totalSavings.subfields.activeMemberSavings ?? 0)}`,
+            `Closed/Exited member savings: ${currency.format(dashboardCards.totalSavings.subfields.closedExitedMemberSavings ?? 0)}`,
+            `Withdrawn savings: ${currency.format(dashboardCards.totalSavings.subfields.withdrawnSavings ?? 0)}`
+          ]),
+          metric(dashboardCards.collectedInPeriod.label, currency.format(dashboardCards.collectedInPeriod.header ?? 0), WalletCards, [
+            `Savings collected: ${currency.format(dashboardCards.collectedInPeriod.subfields.savingsCollected ?? 0)}`,
+            `Principal collected: ${currency.format(dashboardCards.collectedInPeriod.subfields.principalCollected ?? 0)}`,
+            `Interest collected: ${currency.format(dashboardCards.collectedInPeriod.subfields.interestCollected ?? 0)}`,
+            `Penalty collected: ${currency.format(dashboardCards.collectedInPeriod.subfields.penaltyCollected ?? 0)}`,
+            `Withdrawn in period: ${currency.format(dashboardCards.collectedInPeriod.subfields.withdrawnInPeriod ?? 0)}`
+          ]),
+          metric(dashboardCards.activeLoan.label, currency.format(dashboardCards.activeLoan.header ?? 0), IndianRupee, [
+            `Disbursed this month: ${currency.format(dashboardCards.activeLoan.subfields.disbursedThisMonth ?? 0)}`,
+            `Loan disbursed till now: ${currency.format(dashboardCards.activeLoan.subfields.loanDisbursedTillNow ?? 0)}`,
+            `Principal repaid till now: ${currency.format(dashboardCards.activeLoan.subfields.principalRepaidTillNow ?? 0)}`,
+            `Interest pending: ${currency.format(dashboardCards.activeLoan.subfields.interestPending ?? 0)}`,
+            `Penalty pending: ${currency.format(dashboardCards.activeLoan.subfields.penaltyPending ?? 0)}`
+          ]),
+          metric(dashboardCards.remainingBalance.label, currency.format(dashboardCards.remainingBalance.header ?? 0), WalletCards, [
+            `Opening balance: ${currency.format(dashboardCards.remainingBalance.subfields.openingBalance ?? 0)}`,
+            `Savings: ${currency.format(dashboardCards.remainingBalance.subfields.savings ?? 0)}`,
+            `Principal collected: ${currency.format(dashboardCards.remainingBalance.subfields.principalCollected ?? 0)}`,
+            `Interest collected: ${currency.format(dashboardCards.remainingBalance.subfields.interestCollected ?? 0)}`,
+            `Penalty collected: ${currency.format(dashboardCards.remainingBalance.subfields.penaltyCollected ?? 0)}`,
+            `Other income/Gain: ${currency.format(dashboardCards.remainingBalance.subfields.otherIncomeGain ?? 0)}`,
+            `Expense: ${currency.format(dashboardCards.remainingBalance.subfields.expense ?? 0)}`,
+            `Withdrawals: ${currency.format(dashboardCards.remainingBalance.subfields.withdrawals ?? 0)}`,
+            `Loan outstanding: ${currency.format(dashboardCards.remainingBalance.subfields.loanOutstanding ?? 0)}`
+          ]),
+          metric(dashboardCards.activeLoans.label, String(dashboardCards.activeLoans.header ?? 0), Users, [
+            `Disbursed till now: ${dashboardCards.activeLoans.subfields.disbursedTillNow ?? 0}`,
+            `Closed till now: ${dashboardCards.activeLoans.subfields.closedTillNow ?? 0}`,
+            `Activated this month: ${dashboardCards.activeLoans.subfields.activatedThisMonth ?? 0}`,
+            `Overdue loans: ${dashboardCards.activeLoans.subfields.overdueLoans ?? 0}`,
+            `Pending approval loans: ${dashboardCards.activeLoans.subfields.pendingApprovalLoans ?? 0}`
+          ]),
+          metric(dashboardCards.openPeriod.label, dashboardCards.openPeriod.header ?? "None", ShieldCheck, [
+            `Current open month: ${dashboardCards.openPeriod.subfields.currentOpenMonth ?? "None"}`,
+            `Period status: ${dashboardCards.openPeriod.subfields.periodStatus ?? "Not open"}`,
+            `Start date: ${dashboardCards.openPeriod.subfields.startDate ?? "-"}`,
+            `End date: ${dashboardCards.openPeriod.subfields.endDate ?? "-"}`
+          ])
         ].filter(Boolean)}
       />
     </Page>
@@ -7341,20 +7424,49 @@ function Approvals({ state, setState, actor, setConfirmDialog, setNotification }
 }
 
 function Reports({ state, actor }) {
-  const [draftSummaryDate, setDraftSummaryDate] = useState(toIsoDateValue());
-  const [summaryDate, setSummaryDate] = useState(toIsoDateValue());
-  const snapshotState = getStateTillDate(state, summaryDate);
+  const todayIso = toIsoDateValue();
+  const monthStartIso = `${todayIso.slice(0, 8)}01`;
+  const [draftStartDate, setDraftStartDate] = useState(monthStartIso);
+  const [draftEndDate, setDraftEndDate] = useState(todayIso);
+  const [reportRange, setReportRange] = useState({ startDate: monthStartIso, endDate: todayIso });
+  const snapshotState = getStateTillDate(state, reportRange.endDate);
   const snapshotPeriod = {
-    name: `Till ${summaryDate}`,
+    name: `${reportRange.startDate} to ${reportRange.endDate}`,
     startDate: "1900-01-01",
-    endDate: summaryDate
+    endDate: reportRange.endDate
   };
   const groupSummary = calculateGroupFinanceSummary(snapshotState, snapshotPeriod);
+  const rangeTransactions = getCompletedTransactions(snapshotState.transactions || [])
+    .filter((transaction) => isIsoDateInRange(transaction.transactionDate, reportRange.startDate, reportRange.endDate));
+  const rangeExpenses = getCompletedTransactions(snapshotState.expenses || [])
+    .filter((expense) => isIsoDateInRange(expense.transactionDate || expense.expenseDate || expense.createdAt, reportRange.startDate, reportRange.endDate));
+  const groupCollectedInRange = rangeTransactions.reduce((sum, transaction) => {
+    if (transaction.transactionType === "Withdrawal") {
+      return sum - Math.abs(Number(transaction.amount || transaction.allocation?.savings || 0));
+    }
+    return sum
+      + Number(transaction.allocation?.savings || 0)
+      + Number(transaction.allocation?.excess || 0)
+      + Number(transaction.allocation?.principal || 0)
+      + Number(transaction.allocation?.interest || 0)
+      + Number(transaction.allocation?.penalty || 0);
+  }, 0);
+  const groupGainInRange = rangeTransactions.reduce((sum, transaction) => {
+    if (isMigratedOpeningTransaction(transaction) || transaction.transactionType === "Withdrawal") return sum;
+    return sum
+      + Number(transaction.allocation?.interest || 0)
+      + Number(transaction.allocation?.penalty || 0)
+      + Number(transaction.allocation?.charges || 0);
+  }, 0);
+  const groupExpensesInRange = rangeExpenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
+  const groupWithdrawnInRange = rangeTransactions
+    .filter((transaction) => transaction.transactionType === "Withdrawal")
+    .reduce((sum, transaction) => sum + Math.abs(Number(transaction.amount || transaction.allocation?.savings || 0)), 0);
   const memberSummaries = (snapshotState.members || []).map((member) => {
     const summary = calculateMemberFinanceSummary(member, snapshotState, snapshotPeriod, actor);
-    const memberTransactions = getCompletedTransactions(snapshotState.transactions || [])
+    const memberTransactions = rangeTransactions
       .filter((transaction) => String(transaction.memberId) === String(member.id));
-    const collectedTillDate = memberTransactions.reduce((sum, transaction) => {
+    const collectedInRange = memberTransactions.reduce((sum, transaction) => {
       if (transaction.transactionType === "Withdrawal") {
         return sum - Math.abs(Number(transaction.amount || transaction.allocation?.savings || 0));
       }
@@ -7365,6 +7477,19 @@ function Reports({ state, actor }) {
         + Number(transaction.allocation?.interest || 0)
         + Number(transaction.allocation?.penalty || 0);
     }, 0);
+    const gainInRange = memberTransactions.reduce((sum, transaction) => {
+      if (isMigratedOpeningTransaction(transaction) || transaction.transactionType === "Withdrawal") return sum;
+      return sum
+        + Number(transaction.allocation?.interest || 0)
+        + Number(transaction.allocation?.penalty || 0)
+        + Number(transaction.allocation?.charges || 0);
+    }, 0);
+    const expenseInRange = Math.abs(memberTransactions
+      .filter((transaction) => transaction.transactionType === "Group Expense Share")
+      .reduce((sum, transaction) => sum + Number(transaction.allocation?.savings ?? transaction.amount ?? 0), 0));
+    const withdrawnInRange = memberTransactions
+      .filter((transaction) => transaction.transactionType === "Withdrawal")
+      .reduce((sum, transaction) => sum + Math.abs(Number(transaction.amount || transaction.allocation?.savings || 0)), 0);
     const activeLoans = summary.memberActiveLoans || [];
     const principalOutstanding = activeLoans.reduce((sum, loan) => sum + calculateDerivedLoanPrincipalOutstanding(loan, snapshotState), 0);
     const interestDue = activeLoans.reduce((sum, loan) => sum + Number(loan.interestOutstanding || 0), 0);
@@ -7373,14 +7498,16 @@ function Reports({ state, actor }) {
     return {
       member,
       summary,
-      collectedTillDate,
+      collectedInRange,
+      gainInRange,
+      expenseInRange,
+      withdrawnInRange,
       activeLoanCount: activeLoans.length,
       principalOutstanding,
       interestDue,
       penaltyDue
     };
   });
-  const groupCollectedTillDate = memberSummaries.reduce((sum, row) => sum + Number(row.collectedTillDate || 0), 0);
   const groupShareAmount = memberSummaries.reduce((sum, row) => sum + Number(row.summary.shareAmount || 0), 0);
   const groupInterestDue = memberSummaries.reduce((sum, row) => sum + Number(row.interestDue || 0), 0);
   const groupPenaltyDue = memberSummaries.reduce((sum, row) => sum + Number(row.penaltyDue || 0), 0);
@@ -7388,44 +7515,50 @@ function Reports({ state, actor }) {
     row.member.fullName,
     row.member.username || "-",
     row.member.status || "-",
-    currency.format(row.collectedTillDate),
+    currency.format(row.collectedInRange),
     currency.format(row.summary.savings),
-    currency.format(row.summary.gain),
-    currency.format(row.summary.expense),
+    currency.format(row.gainInRange),
+    currency.format(row.expenseInRange),
     currency.format(row.summary.shareAmount),
     row.activeLoanCount,
     currency.format(row.principalOutstanding),
     currency.format(row.interestDue),
     currency.format(row.penaltyDue),
     currency.format(row.summary.outstanding),
-    currency.format(row.summary.withdrawn)
+    currency.format(row.withdrawnInRange)
   ]);
 
   return (
-    <Page title="Reports & Audit" subtitle="Group and member financial summary till selected date" action={null}>
-      <Section title="Summary date">
+    <Page title="Reports & Audit" subtitle="Group and member financial summary for selected dates" action={null}>
+      <Section title="Report dates">
         <form
           className="form-grid single-control-form report-generate-form"
           onSubmit={(event) => {
             event.preventDefault();
-            setSummaryDate(draftSummaryDate || toIsoDateValue());
+            const nextStartDate = draftStartDate || monthStartIso;
+            const nextEndDate = draftEndDate || todayIso;
+            setReportRange({
+              startDate: nextStartDate <= nextEndDate ? nextStartDate : nextEndDate,
+              endDate: nextStartDate <= nextEndDate ? nextEndDate : nextStartDate
+            });
           }}
         >
-          <Field label="Show summary till date" type="date" value={draftSummaryDate} onChange={setDraftSummaryDate} />
+          <Field label="Start date" type="date" value={draftStartDate} onChange={setDraftStartDate} />
+          <Field label="End date" type="date" value={draftEndDate} onChange={setDraftEndDate} />
           <button className="primary-button" type="submit">Generate report</button>
         </form>
-        <p className="section-note">Showing generated values till {summaryDate}.</p>
+        <p className="section-note">Showing generated values from {reportRange.startDate} to {reportRange.endDate}. Balance columns are shown as of the end date.</p>
       </Section>
       <Section title="Group summary">
         <Table
-          headers={["Group", "Members", "Collected till date", "Total savings", "Group gain", "Group expenses", "Remaining balance", "Active loans", "Principal outstanding", "Interest due", "Penalty due", "Total share amount", "Withdrawn"]}
+          headers={["Group", "Members", "Collected in range", "Savings as of end date", "Income/Gain in range", "Expenses in range", "Remaining balance as of end date", "Active loans", "Principal outstanding", "Interest due", "Penalty due", "Total share amount", "Withdrawn in range"]}
           rows={[[
             snapshotState.groups?.[0]?.name || "Group",
             snapshotState.members?.length || 0,
-            currency.format(groupCollectedTillDate),
+            currency.format(groupCollectedInRange),
             currency.format(groupSummary.totalSavings),
-            currency.format(groupSummary.groupGain),
-            currency.format(groupSummary.totalExpenses),
+            currency.format(groupGainInRange),
+            currency.format(groupExpensesInRange),
             currency.format(groupSummary.remainingBalance),
             groupSummary.activeLoans.length,
             currency.format(groupSummary.totalActiveLoan),
@@ -7438,12 +7571,18 @@ function Reports({ state, actor }) {
       </Section>
       <Section title="Member summary">
         <Table
-          headers={["Member", "Username", "Status", "Collected till date", "Savings", "Group gain", "Group expense", "Share amount", "Active loans", "Principal outstanding", "Interest due", "Penalty due", "Total loan balance", "Withdrawn"]}
+          headers={["Member", "Username", "Status", "Collected in range", "Savings as of end date", "Income/Gain in range", "Expense in range", "Share amount as of end date", "Active loans", "Principal outstanding", "Interest due", "Penalty due", "Total loan balance", "Withdrawn in range"]}
           rows={memberRows}
         />
       </Section>
     </Page>
   );
+}
+
+function isIsoDateInRange(dateValue, startDate, endDate) {
+  if (!dateValue) return false;
+  const value = String(dateValue).slice(0, 10);
+  return value >= startDate && value <= endDate;
 }
 
 function getStateTillDate(state, tillDate) {

@@ -2072,7 +2072,7 @@ dt {
 
 .single-control-form,
 .report-generate-form {
-  grid-template-columns: minmax(0, 320px) auto;
+  grid-template-columns: repeat(2, minmax(0, 260px)) auto;
   align-items: end;
 }
 

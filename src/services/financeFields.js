@@ -202,6 +202,219 @@ export function calculateGroupFinanceSummary(state, period = getDashboardPeriod(
   };
 }
 
+function isInactiveMember(member) {
+  return String(member?.status ?? "").toUpperCase() === "INACTIVE"
+    || Boolean(member?.inactiveDate || member?.exitDate);
+}
+
+function isPendingStatus(status) {
+  return String(status ?? "").toUpperCase() === "PENDING";
+}
+
+function memberSavingsBeforeWithdrawals(member, transactions = []) {
+  const memberTransactions = transactions.filter((transaction) => String(transaction.memberId) === String(member?.id));
+  const ledgerSavings = memberTransactions
+    .filter((transaction) => transaction.transactionType !== "Withdrawal")
+    .filter((transaction) => transaction.transactionType !== "Group Expense Share")
+    .reduce((sum, transaction) =>
+      sum + Number(transaction.allocation?.savings ?? 0) + Number(transaction.allocation?.excess ?? 0), 0);
+  const hasSavingsLedger = memberTransactions.some((transaction) =>
+    transaction.transactionType !== "Withdrawal"
+    && transaction.transactionType !== "Group Expense Share"
+    && (Number(transaction.allocation?.savings ?? 0) !== 0 || Number(transaction.allocation?.excess ?? 0) !== 0)
+  );
+  return hasSavingsLedger ? ledgerSavings : Number(member?.savings || 0);
+}
+
+function withdrawalTotal(transactions = []) {
+  return transactions
+    .filter((transaction) => transaction.transactionType === "Withdrawal")
+    .reduce((sum, transaction) => sum + Math.abs(Number(transaction.amount || transaction.allocation?.savings || 0)), 0);
+}
+
+function otherIncomeTotal(transactions = []) {
+  return transactions.reduce((sum, transaction) => {
+    if (isMigratedOpeningTransaction(transaction) || transaction.transactionType === "Withdrawal") return sum;
+    if (transaction.transactionType === "Other Charge") {
+      return sum + Number(transaction.amount || transaction.allocation?.charges || 0);
+    }
+    return sum + Number(transaction.allocation?.charges || 0);
+  }, 0);
+}
+
+function validateCardValue(name, header, calculated) {
+  return {
+    name,
+    valid: Math.abs(Number(header || 0) - Number(calculated || 0)) < 0.01,
+    header,
+    calculated
+  };
+}
+
+export function validateDashboardCards(cards) {
+  return {
+    totalSavings: validateCardValue("totalSavings", cards.totalSavings.header, cards.totalSavings.calculatedHeader),
+    collectedInPeriod: validateCardValue("collectedInPeriod", cards.collectedInPeriod.header, cards.collectedInPeriod.calculatedHeader),
+    activeLoan: validateCardValue("activeLoan", cards.activeLoan.header, cards.activeLoan.calculatedHeader),
+    remainingBalance: validateCardValue("remainingBalance", cards.remainingBalance.header, cards.remainingBalance.calculatedHeader),
+    activeLoans: validateCardValue("activeLoans", cards.activeLoans.header, cards.activeLoans.calculatedHeader)
+  };
+}
+
+export function calculateDashboardCards(state, period = getDashboardPeriod(state)) {
+  const completedTransactions = getCompletedTransactions(state.transactions || []);
+  const completedExpenses = getCompletedTransactions(state.expenses || []);
+  const activeLoans = (state.loans || []).filter(isOutstandingLoan);
+  const completedLoans = (state.loans || []).filter((loan) =>
+    isCompletedFinancialStatus(loan.approvalStatus)
+    || ["ACTIVE", "COMPLETED", "APPROVED", "CLOSED"].includes(String(loan.status ?? loan.loanStatus ?? "").toUpperCase())
+  );
+  const periodTransactions = completedTransactions.filter((transaction) => isDateInPeriod(transaction.transactionDate, period));
+  const activeMembers = (state.members || []).filter((member) => !isInactiveMember(member));
+  const closedMembers = (state.members || []).filter(isInactiveMember);
+  const activeMemberSavings = activeMembers.reduce((sum, member) => sum + memberSavingsBeforeWithdrawals(member, completedTransactions), 0);
+  const closedMemberSavings = closedMembers.reduce((sum, member) => sum + memberSavingsBeforeWithdrawals(member, completedTransactions), 0);
+  const withdrawnSavings = withdrawalTotal(completedTransactions);
+  const totalSavingsHeader = activeMemberSavings + closedMemberSavings - withdrawnSavings;
+
+  const savingsCollected = sumCollectedSavings(periodTransactions);
+  const principalCollected = sumCollectedAllocation(periodTransactions, "principal");
+  const interestCollected = sumCollectedAllocation(periodTransactions, "interest");
+  const penaltyCollected = sumCollectedAllocation(periodTransactions, "penalty");
+  const withdrawnInPeriod = withdrawalTotal(periodTransactions);
+  const collectedInPeriodHeader = savingsCollected + principalCollected + interestCollected + penaltyCollected - withdrawnInPeriod;
+
+  const disbursedThisMonth = completedLoans
+    .filter((loan) => isDateInPeriod(loan.startDate, period))
+    .reduce((sum, loan) => sum + Number(loan.amount || 0), 0);
+  const loanDisbursedTillNow = completedLoans.reduce((sum, loan) => sum + Number(loan.amount || 0), 0);
+  const principalRepaidTillNow = sumCollectedAllocation(completedTransactions, "principal");
+  const principalOutstanding = Math.max(0, loanDisbursedTillNow - principalRepaidTillNow);
+  const interestPending = activeLoans.reduce((sum, loan) => sum + Number(loan.interestOutstanding || 0), 0);
+  const penaltyPending = activeLoans.reduce((sum, loan) => sum + Number(loan.penaltyOutstanding || 0), 0);
+
+  const legacyOpening = calculateLegacyGroupOpeningSummary(state, {
+    totalSavings: totalSavingsHeader,
+    activeLoanOutstanding: principalOutstanding
+  });
+  const openingBalance = legacyOpening.openingBankBalance;
+  const totalPrincipalCollected = principalRepaidTillNow;
+  const totalInterestCollected = sumCollectedAllocation(completedTransactions, "interest");
+  const totalPenaltyCollected = sumCollectedAllocation(completedTransactions, "penalty");
+  const otherIncomeGain = otherIncomeTotal(completedTransactions) + legacyOpening.groupGain;
+  const expenses = completedExpenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0) + legacyOpening.openingGroupExpense;
+  const savingsBeforeWithdrawals = activeMemberSavings + closedMemberSavings;
+  const remainingBalanceHeader = openingBalance
+    + savingsBeforeWithdrawals
+    + totalPrincipalCollected
+    + totalInterestCollected
+    + totalPenaltyCollected
+    + otherIncomeGain
+    - expenses
+    - withdrawnSavings
+    - principalOutstanding;
+
+  const closedLoanCount = completedLoans.filter((loan) => !isOutstandingLoan(loan)).length;
+  const disbursedLoanCount = completedLoans.length;
+  const activatedThisMonth = completedLoans.filter((loan) => isDateInPeriod(loan.startDate, period)).length;
+  const pendingApprovalLoans = (state.loans || []).filter((loan) => isPendingStatus(loan.approvalStatus || loan.status || loan.loanStatus)).length;
+  const todayIso = toIsoDateValue();
+  const overdueLoans = new Set(calculatePendingDues(state, null, false)
+    .filter((row) => String(row.dueDate || "") < todayIso && Number(row.totalDue || 0) > 0)
+    .map((row) => String(row.memberId))).size;
+  const activeLoanCountHeader = disbursedLoanCount - closedLoanCount;
+  const openPeriod = getOpenPeriod(state.periods || []);
+  const selectedPeriod = openPeriod ?? period;
+
+  const cards = {
+    totalSavings: {
+      key: "totalSavings",
+      label: "Total savings",
+      header: totalSavingsHeader,
+      calculatedHeader: activeMemberSavings + closedMemberSavings - withdrawnSavings,
+      subfields: {
+        members: (state.members || []).length,
+        activeMembers: activeMembers.length,
+        activeMemberSavings,
+        closedExitedMemberSavings: closedMemberSavings,
+        withdrawnSavings
+      }
+    },
+    collectedInPeriod: {
+      key: "collectedInPeriod",
+      label: `Collected in period ${selectedPeriod?.name ?? ""}`.trim(),
+      header: collectedInPeriodHeader,
+      calculatedHeader: savingsCollected + principalCollected + interestCollected + penaltyCollected - withdrawnInPeriod,
+      subfields: {
+        savingsCollected,
+        principalCollected,
+        interestCollected,
+        penaltyCollected,
+        withdrawnInPeriod
+      }
+    },
+    activeLoan: {
+      key: "activeLoan",
+      label: "Active Loan",
+      header: principalOutstanding,
+      calculatedHeader: Math.max(0, loanDisbursedTillNow - principalRepaidTillNow),
+      subfields: {
+        disbursedThisMonth,
+        loanDisbursedTillNow,
+        principalRepaidTillNow,
+        interestPending,
+        penaltyPending
+      }
+    },
+    remainingBalance: {
+      key: "remainingBalance",
+      label: "Remaining Balance",
+      header: remainingBalanceHeader,
+      calculatedHeader: openingBalance + savingsBeforeWithdrawals + totalPrincipalCollected + totalInterestCollected + totalPenaltyCollected + otherIncomeGain - expenses - withdrawnSavings - principalOutstanding,
+      subfields: {
+        openingBalance,
+        savings: savingsBeforeWithdrawals,
+        principalCollected: totalPrincipalCollected,
+        interestCollected: totalInterestCollected,
+        penaltyCollected: totalPenaltyCollected,
+        otherIncomeGain,
+        expense: expenses,
+        withdrawals: withdrawnSavings,
+        loanOutstanding: principalOutstanding
+      }
+    },
+    activeLoans: {
+      key: "activeLoans",
+      label: "Active Loans",
+      header: activeLoanCountHeader,
+      calculatedHeader: disbursedLoanCount - closedLoanCount,
+      subfields: {
+        disbursedTillNow: disbursedLoanCount,
+        closedTillNow: closedLoanCount,
+        activatedThisMonth,
+        overdueLoans,
+        pendingApprovalLoans
+      }
+    },
+    openPeriod: {
+      key: "openPeriod",
+      label: "Open Period",
+      header: selectedPeriod?.name ?? "None",
+      subfields: {
+        currentOpenMonth: selectedPeriod?.name ?? "None",
+        periodStatus: selectedPeriod?.status ?? "Not open",
+        startDate: selectedPeriod?.startDate ?? "-",
+        endDate: selectedPeriod?.endDate ?? "-"
+      }
+    }
+  };
+
+  return {
+    cards,
+    validations: validateDashboardCards(cards)
+  };
+}
+
 export function calculateMemberFinanceSummary(member, state, period = getDashboardPeriod(state), actor = null) {
   const groupSummary = calculateGroupFinanceSummary(state, period);
   const ledger = calculateMemberLedgerSummary(member, state);
@@ -239,6 +452,130 @@ export function calculateMemberFinanceSummary(member, state, period = getDashboa
     monthlyWithdrawn,
     monthlyCollections: monthlySavings + monthlyPrincipal + monthlyInterest + monthlyPenalty - monthlyWithdrawn,
     sharePercent
+  };
+}
+
+export function validateMemberDashboardCards(cards) {
+  return {
+    savings: validateCardValue("memberSavings", cards.savings.header, cards.savings.calculatedHeader),
+    collectedInPeriod: validateCardValue("memberCollectedInPeriod", cards.collectedInPeriod.header, cards.collectedInPeriod.calculatedHeader),
+    shareAmount: validateCardValue("memberShareAmount", cards.shareAmount.header, cards.shareAmount.calculatedHeader),
+    loanBalance: validateCardValue("memberLoanBalance", cards.loanBalance.header, cards.loanBalance.calculatedHeader),
+    nextMinimumDue: validateCardValue("memberNextMinimumDue", cards.nextMinimumDue.header, cards.nextMinimumDue.calculatedHeader),
+    sharePercent: validateCardValue("memberSharePercent", cards.sharePercent.header, cards.sharePercent.calculatedHeader)
+  };
+}
+
+export function calculateMemberDashboardCards(member, state, period = getDashboardPeriod(state), actor = null) {
+  const summary = calculateMemberFinanceSummary(member, state, period, actor);
+  const completedTransactions = getCompletedTransactions(state.transactions || []);
+  const memberTransactions = completedTransactions.filter((transaction) => String(transaction.memberId) === String(member?.id));
+  const grossSavings = memberTransactions
+    .filter((transaction) => transaction.transactionType !== "Withdrawal")
+    .filter((transaction) => transaction.transactionType !== "Group Expense Share")
+    .reduce((sum, transaction) =>
+      sum + Number(transaction.allocation?.savings ?? 0) + Number(transaction.allocation?.excess ?? 0), 0);
+  const hasSavingsLedger = memberTransactions.some((transaction) =>
+    transaction.transactionType !== "Withdrawal"
+    && transaction.transactionType !== "Group Expense Share"
+    && (Number(transaction.allocation?.savings ?? 0) !== 0 || Number(transaction.allocation?.excess ?? 0) !== 0)
+  );
+  const savingsBeforeWithdrawals = hasSavingsLedger ? grossSavings : Number(member?.savings || 0);
+  const withdrawnSavings = withdrawalTotal(memberTransactions);
+  const periodTransactions = memberTransactions.filter((transaction) => isDateInPeriod(transaction.transactionDate, period));
+  const savingsCollected = sumCollectedSavings(periodTransactions);
+  const principalCollected = sumCollectedAllocation(periodTransactions, "principal");
+  const interestCollected = sumCollectedAllocation(periodTransactions, "interest");
+  const penaltyCollected = sumCollectedAllocation(periodTransactions, "penalty");
+  const withdrawnInPeriod = withdrawalTotal(periodTransactions);
+  const activeLoans = summary.memberActiveLoans || [];
+  const principalOutstanding = activeLoans.reduce((sum, loan) => sum + calculateDerivedLoanPrincipalOutstanding(loan, state), 0);
+  const interestPending = activeLoans.reduce((sum, loan) => sum + Number(loan.interestOutstanding || 0), 0);
+  const penaltyPending = activeLoans.reduce((sum, loan) => sum + Number(loan.penaltyOutstanding || 0), 0);
+  const savingDue = summary.dueRows.reduce((sum, row) => sum + Number(row.savingDue || 0), 0);
+  const interestDue = summary.interestDue;
+  const penaltyDue = summary.dueRows.reduce((sum, row) => sum + Number(row.penaltyDue || 0), 0);
+  const shareAmount = summary.savings + summary.gain - summary.expense;
+  const totalGroupShare = (state.members || []).reduce((sum, item) => sum + Math.max(0, calculateMemberLedgerSummary(item, state).shareAmount), 0);
+  const sharePercent = totalGroupShare > 0 ? Number(((Math.max(0, shareAmount) / totalGroupShare) * 100).toFixed(2)) : 0;
+
+  const cards = {
+    savings: {
+      key: "memberSavings",
+      label: financeFieldDictionary.member.savings.label,
+      header: savingsBeforeWithdrawals - withdrawnSavings,
+      calculatedHeader: savingsBeforeWithdrawals - withdrawnSavings,
+      subfields: {
+        savingsBeforeWithdrawals,
+        withdrawnSavings,
+        thisPeriodSavings: savingsCollected
+      }
+    },
+    collectedInPeriod: {
+      key: "memberCollectedInPeriod",
+      label: `${financeFieldDictionary.member.monthlyCollections.label} ${period?.name ?? ""}`.trim(),
+      header: savingsCollected + principalCollected + interestCollected + penaltyCollected - withdrawnInPeriod,
+      calculatedHeader: savingsCollected + principalCollected + interestCollected + penaltyCollected - withdrawnInPeriod,
+      subfields: {
+        savingsCollected,
+        principalCollected,
+        interestCollected,
+        penaltyCollected,
+        withdrawnInPeriod
+      }
+    },
+    shareAmount: {
+      key: "memberShareAmount",
+      label: financeFieldDictionary.member.shareAmount.label,
+      header: shareAmount,
+      calculatedHeader: summary.savings + summary.gain - summary.expense,
+      subfields: {
+        savings: summary.savings,
+        incomeGainShare: summary.gain,
+        expenseShare: summary.expense
+      }
+    },
+    loanBalance: {
+      key: "memberLoanBalance",
+      label: financeFieldDictionary.member.outstanding.label,
+      header: principalOutstanding + interestPending + penaltyPending,
+      calculatedHeader: principalOutstanding + interestPending + penaltyPending,
+      subfields: {
+        activeLoans: activeLoans.length,
+        principalOutstanding,
+        interestPending,
+        penaltyPending,
+        disbursedTillNow: summary.memberLoans.reduce((sum, loan) => sum + Number(loan.amount || 0), 0)
+      }
+    },
+    nextMinimumDue: {
+      key: "memberNextMinimumDue",
+      label: financeFieldDictionary.member.nextDueAmount.label,
+      header: savingDue + interestDue + penaltyDue,
+      calculatedHeader: savingDue + interestDue + penaltyDue,
+      subfields: {
+        savingDue,
+        interestDue,
+        penaltyDue,
+        dueDate: summary.dueDate
+      }
+    },
+    sharePercent: {
+      key: "memberSharePercent",
+      label: financeFieldDictionary.member.sharePercent.label,
+      header: sharePercent,
+      calculatedHeader: sharePercent,
+      subfields: {
+        memberShareAmount: Math.max(0, shareAmount),
+        totalGroupShare
+      }
+    }
+  };
+
+  return {
+    cards,
+    summary,
+    validations: validateMemberDashboardCards(cards)
   };
 }
 
