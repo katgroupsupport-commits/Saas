@@ -493,6 +493,7 @@ export function calculateMemberDashboardCards(member, state, period = getDashboa
   const interestPending = activeLoans.reduce((sum, loan) => sum + Number(loan.interestOutstanding || 0), 0);
   const penaltyPending = activeLoans.reduce((sum, loan) => sum + Number(loan.penaltyOutstanding || 0), 0);
   const savingDue = summary.dueRows.reduce((sum, row) => sum + Number(row.savingDue || 0), 0);
+  const principalDue = summary.dueRows.reduce((sum, row) => sum + Number(row.principalDue ?? row.outstandingPrincipal ?? 0), 0);
   const interestDue = summary.interestDue;
   const penaltyDue = summary.dueRows.reduce((sum, row) => sum + Number(row.penaltyDue || 0), 0);
   const shareAmount = summary.savings + summary.gain - summary.expense;
@@ -551,10 +552,11 @@ export function calculateMemberDashboardCards(member, state, period = getDashboa
     nextMinimumDue: {
       key: "memberNextMinimumDue",
       label: financeFieldDictionary.member.nextDueAmount.label,
-      header: savingDue + interestDue + penaltyDue,
-      calculatedHeader: savingDue + interestDue + penaltyDue,
+      header: savingDue + principalDue + interestDue + penaltyDue,
+      calculatedHeader: savingDue + principalDue + interestDue + penaltyDue,
       subfields: {
         savingDue,
+        principalDue,
         interestDue,
         penaltyDue,
         dueDate: summary.dueDate
@@ -713,6 +715,7 @@ export function getEffectiveMemberSetup(member, group = {}) {
     interestRate: configuredNumber(member?.interestRate, group.interestRate, 0),
     loanTenureMonths: configuredNumber(member?.loanTenureMonths, group.loanTenureMonths, 0),
     loanLimit: configuredNumber(member?.loanLimit, group.maximumLoanLimit, 0),
+    penaltyAfterDueDateAmount: configuredNumber(member?.penaltyAfterDueDateAmount, group.penaltyAfterDueDateAmount ?? group.penaltyAmount, 0),
     loanDueDay: configuredNumber(member?.loanDueDay, group.loanDueDay, 1),
     interestType: member?.interestType || group.interestType || "Reducing"
   };
@@ -842,6 +845,11 @@ export function getPeriodDueDate(group, period) {
   return new Date(base.getFullYear(), base.getMonth(), dueDay);
 }
 
+function getPreviousDueDate(group, dueDate) {
+  const dueDay = Math.min(28, Math.max(1, Number(group?.loanDueDay || 1)));
+  return new Date(dueDate.getFullYear(), dueDate.getMonth() - 1, dueDay);
+}
+
 export function getDuePeriods(state) {
   const today = new Date();
   const group = state.groups?.[0] ?? {};
@@ -876,13 +884,17 @@ export function calculatePendingDues(state, actor = null, memberOnly = false) {
     if (dueDate < groupStartDate) return [];
     const dueDateIso = toIsoDateValue(dueDate);
     const periodEnd = new Date(period.endDate || dueDate);
-    const paymentCutoff = periodEnd < today ? periodEnd : today;
+    const cycleStart = getPreviousDueDate(group, dueDate);
+    cycleStart.setDate(cycleStart.getDate() + 1);
+    const cycleStartIso = toIsoDateValue(cycleStart);
+    const paymentCutoff = dueDate < today ? dueDate : today;
     const paymentCutoffIso = toIsoDateValue(paymentCutoff);
     return members.map((member) => {
       const setup = getEffectiveMemberSetup(member, group);
       const transactions = completedTransactions.filter((transaction) =>
         String(transaction.memberId) === String(member.id)
-        && isDateInPeriod(transaction.transactionDate, period)
+        && String(transaction.transactionDate || "") >= cycleStartIso
+        && String(transaction.transactionDate || "") <= paymentCutoffIso
       );
       const savingSetup = setup.monthlySaving;
       const savingPaid = transactions.reduce((sum, transaction) =>
@@ -893,21 +905,39 @@ export function calculatePendingDues(state, actor = null, memberOnly = false) {
         && isOutstandingLoan(loan)
         && new Date(loan.startDate || period.startDate) <= dueDate
       );
-      const outstandingPrincipal = memberLoans.reduce((sum, loan) => sum + Number(loan.principalOutstanding || 0), 0);
+      const outstandingPrincipal = memberLoans.reduce((sum, loan) => sum + calculateDerivedLoanPrincipalOutstanding(loan, state), 0);
+      const principalPaidInCycle = transactions.reduce((sum, transaction) =>
+        sum + Math.max(0, Number(transaction.allocation?.principal || 0)), 0);
+      const principalDueBeforePayment = setup.loanTenureMonths > 0
+        ? Math.min(
+            outstandingPrincipal + principalPaidInCycle,
+            memberLoans.reduce((sum, loan) => {
+              const loanOutstanding = calculateDerivedLoanPrincipalOutstanding(loan, state);
+              const originalPrincipal = Number(loan.amount || loan.principal || loan.originalPrincipal || loanOutstanding || 0);
+              return sum + (originalPrincipal / setup.loanTenureMonths);
+            }, 0)
+          )
+        : 0;
+      const principalDue = Math.min(outstandingPrincipal, Math.max(0, principalDueBeforePayment - principalPaidInCycle));
       const interestDue = calculateMemberLoanInterestDue(member, state, dueDate, paymentCutoff);
       const allPenaltyPaidTillCutoff = allocationPaidForMember(state, member.id, "penalty", { untilDate: paymentCutoffIso });
       const allPenaltyWaivedTillCutoff = allocationWaivedForMember(state, member.id, "penalty", { untilDate: paymentCutoffIso });
       const openingPenaltyDue = Number(member.penaltyOutstanding || 0)
         + memberLoans.reduce((sum, loan) => sum + Number(loan.penaltyOutstanding || 0), 0);
-      const penaltyDue = Math.max(0, openingPenaltyDue + (dueDate < today && (savingDue + interestDue) > 0 ? Number(group.penaltyAmount || 0) : 0) - allPenaltyPaidTillCutoff - allPenaltyWaivedTillCutoff);
-      const totalDue = savingDue + interestDue + penaltyDue;
+      const latePenalty = dueDate < today && (savingDue + principalDue + interestDue) > 0
+        ? Number(setup.penaltyAfterDueDateAmount || 0)
+        : 0;
+      const penaltyDue = Math.max(0, openingPenaltyDue + latePenalty - allPenaltyPaidTillCutoff - allPenaltyWaivedTillCutoff);
+      const totalDue = savingDue + principalDue + interestDue + penaltyDue;
       return {
         id: `${period.id}_${member.id}`,
         periodName: period.name,
         memberId: member.id,
         memberName: member.fullName,
         dueDate: dueDateIso,
+        cycleStartDate: cycleStartIso,
         savingDue,
+        principalDue,
         outstandingPrincipal,
         interestDue,
         penaltyDue,

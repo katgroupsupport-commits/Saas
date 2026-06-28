@@ -158,6 +158,20 @@ function nullableNumber(value) {
   return Number.isFinite(numberValue) ? numberValue : null;
 }
 
+function nullableNameList(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.filter(Boolean);
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed.filter(Boolean);
+    } catch {
+      return value.split(",").map((item) => item.trim()).filter(Boolean);
+    }
+  }
+  return [];
+}
+
 function mapGroup(group, setup = {}) {
   return {
     id: group.group_id,
@@ -173,9 +187,12 @@ function mapGroup(group, setup = {}) {
     interestRate: nullableNumber(setup.interest_rate),
     interestType: setup.interest_type ?? "Reducing",
     penaltyAmount: nullableNumber(setup.penalty_amount),
+    penaltyAfterDueDateAmount: nullableNumber(setup.penalty_amount),
     maximumLoanLimit: nullableNumber(setup.loan_limit),
     loanTenureMonths: nullableNumber(setup.loan_tenure_months),
     loanDueDay: nullableNumber(setup.loan_due_day) ?? 1,
+    approvers: nullableNameList(setup.approver_names),
+    admins: nullableNameList(setup.admin_names),
     maxLoanMultiplier: 3,
     subscriptionStatus: group.status === "ACTIVE" ? "Active" : "Inactive",
     createdDate: group.creation_date,
@@ -681,6 +698,8 @@ export const repository = {
       auto_approve_flag: "N",
       loan_tenure_months: group.loanTenureMonths ?? null,
       loan_due_day: group.loanDueDay ?? null,
+      approver_names: group.approvers ?? [],
+      admin_names: group.admins ?? [],
       created_by: profile.user_id,
       last_updated_by: profile.user_id
     }]);
@@ -732,9 +751,12 @@ export const repository = {
         monthly_saving_amount: group.monthlySaving ?? null,
         interest_rate: group.interestRate ?? null,
         interest_type: group.interestType ?? "Reducing",
+        penalty_amount: group.penaltyAmount ?? null,
         loan_limit: group.maximumLoanLimit ?? null,
         loan_tenure_months: group.loanTenureMonths ?? null,
-        loan_due_day: group.loanDueDay ?? null
+        loan_due_day: group.loanDueDay ?? null,
+        approver_names: group.approvers ?? [],
+        admin_names: group.admins ?? []
       }),
       creatorMember: member ? { ...mapMember({ ...member, role: { role_name: roles.GROUP_ADMIN } }, {}, {
         custom_saving_amount: null,
@@ -779,9 +801,12 @@ export const repository = {
       monthly_saving_amount: updates.monthlySaving ?? updates.loanEligibilityRules?.monthlySaving,
       interest_rate: updates.interestRate,
       interest_type: updates.interestType,
+      penalty_amount: updates.penaltyAmount ?? updates.penaltyAfterDueDateAmount,
       loan_limit: updates.maximumLoanLimit,
       loan_tenure_months: updates.loanTenureMonths,
       loan_due_day: updates.loanDueDay,
+      approver_names: updates.approvers,
+      admin_names: updates.admins,
       last_updated_by: profile?.user_id
     };
     Object.keys(setupPayload).forEach((key) => setupPayload[key] === undefined && delete setupPayload[key]);
@@ -1497,7 +1522,7 @@ export const repository = {
       loans: loans.filter(groupScoped).map((loan) => mapLoan(loan, memberById[loan.member_id])),
       pendingSetupChanges: pendingSetupChanges.filter(groupScoped).map(mapPendingSetupChange),
       approvals: approvals
-        .filter((row) => isProductOwnerEmail(profile.email) || memberIds.has(row.approver_member_id))
+        .filter((row) => isProductOwnerEmail(profile.email) || groupScoped(row) || memberIds.has(row.approver_member_id))
         .map(mapApproval),
       subscriptions: subscriptions.filter(groupScoped).map((row) => mapSubscription(row, planById[row.subscription_plan_id])),
       transactions: headers.filter(groupScoped).map((header) => mapTransaction(header, linesByHeader[header.member_trx_id] ?? [])).sort((a, b) => String(b.transactionDate).localeCompare(String(a.transactionDate))),

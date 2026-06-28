@@ -227,8 +227,7 @@ function buildSidebarSections(menu, role) {
         has("Transactions") && { path: "/operations/transactions", label: "Transactions" },
         (has("Loans") || has("Request Loan")) && { path: "/operations/loans", label: adminLike ? "Loans" : "Request Loan" },
         (has("Withdrawals") || has("Request Withdrawal")) && { path: "/operations/withdrawals", label: adminLike ? "Withdrawals" : "Request Withdrawal" },
-        has("Pending Dues") && { path: "/pending-dues", label: "Pending Dues" },
-        has("AI Agent") && { path: "/ai-agent", label: "AI Agent" }
+        has("Pending Dues") && { path: "/pending-dues", label: "Pending Dues" }
       ].filter(Boolean)
     },
     {
@@ -286,6 +285,29 @@ function App() {
     if (!notification) return undefined;
     const timeoutId = setTimeout(() => setNotification(null), notification.details ? 9000 : 4500);
     return () => clearTimeout(timeoutId);
+  }, [notification]);
+
+  useEffect(() => {
+    if (!notification || !state.session?.signedIn) return;
+    const notificationId = notification.id || makeId("ntf");
+    setState((current) => {
+      if ((current.notifications || []).some((item) => String(item.id) === String(notificationId))) return current;
+      return {
+        ...current,
+        notifications: [
+          {
+            id: notificationId,
+            groupId: selectedGroupId,
+            title: notification.title || notification.message || "Notification",
+            body: notification.body || notification.details || "",
+            type: notification.type || "info",
+            createdAt: new Date().toISOString(),
+            read: false
+          },
+          ...(current.notifications || [])
+        ]
+      };
+    });
   }, [notification]);
 
   const location = useLocation();
@@ -1091,7 +1113,7 @@ function PolicyPage({ type }) {
 }
 
 function GuidePage({ insideApp = false }) {
-  const [showFormulas, setShowFormulas] = useState(false);
+  const [showQa, setShowQa] = useState(false);
   function downloadGuidePdf() {
     const url = `${window.location.origin}/user-guide.pdf`;
     const isMobileDownload = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
@@ -1107,18 +1129,18 @@ function GuidePage({ insideApp = false }) {
     anchor.click();
     anchor.remove();
   }
-  const content = showFormulas ? <FormulaGuide /> : <GuideContent />;
+  const content = showQa ? <QaGuide /> : <GuideContent />;
   const guideActions = (
     <div className="button-row">
-      <button type="button" className="secondary-button" onClick={() => setShowFormulas((value) => !value)}>
-        {showFormulas ? "Show Process Guide" : "Show Formulas"}
+      <button type="button" className="secondary-button" onClick={() => setShowQa((value) => !value)}>
+        {showQa ? "Show Process Guide" : "Show Q&A"}
       </button>
       <button type="button" className="secondary-button" onClick={downloadGuidePdf}>Download PDF</button>
     </div>
   );
   if (insideApp) {
     return (
-      <Page title="User Guide" subtitle="Simple visual steps, formulas and rules" action={guideActions}>
+      <Page title="User Guide" subtitle="Simple visual steps, common questions and operating rules" action={guideActions}>
         {content}
       </Page>
     );
@@ -1127,8 +1149,8 @@ function GuidePage({ insideApp = false }) {
   return (
     <PublicPage title="User Guide" subtitle="Simple visual steps for admins, approvers and members.">
       <div className="button-row">
-        <button type="button" className="secondary-button" onClick={() => setShowFormulas((value) => !value)}>
-          {showFormulas ? "Show Process Guide" : "Show Formulas"}
+        <button type="button" className="secondary-button" onClick={() => setShowQa((value) => !value)}>
+          {showQa ? "Show Process Guide" : "Show Q&A"}
         </button>
         <button type="button" className="primary-button public-button" onClick={downloadGuidePdf}>Download PDF</button>
         <NavLink className="secondary-button" to="/login">Login</NavLink>
@@ -1138,34 +1160,58 @@ function GuidePage({ insideApp = false }) {
   );
 }
 
-function FormulaGuide() {
-  const formulas = [
-    ["This month collection", "Savings paid + principal collected + interest collected + penalty collected + other income + migrated entries + completed adjustments/reversals/waivers. Expenses and loan disbursement are not counted here."],
-    ["Savings split", "Monthly setup saving - completed savings already paid in the open month. If already paid, new amount goes to interest, principal, penalty, then excess."],
-    ["Member savings", "Completed saving lines + migrated saving + excess saving - withdrawals + completed saving adjustments/reversals. Group expense share is shown separately, not subtracted from savings."],
-    ["Group gain", "Completed loan interest + completed penalty + other income. Waived interest is not group gain and is not distributed."],
-    ["Remaining balance", "All completed collections + migrated opening balance - loan disbursement - withdrawals - group expenses + completed corrections."],
-    ["Outstanding loan", "Principal outstanding + interest outstanding + penalty outstanding - completed repayments - completed waivers."],
-    ["Member share amount", "Savings + distributed gain - member expense share - outstanding loan/interest/penalty."],
-    ["Corrections", "Adjustment adds only the difference. Reversal adds a full negative child entry. Original approved entry is never edited."],
-    ["Approval rule", "If approvers are configured, transactions, loans, migration, waivers, adjustments and reversals stay Pending until all approvers approve."],
-    ["Legacy migration", "Migrated saving, loan, interest, penalty and expense are posted as ledger entries so all dashboards and reports include them."],
-    ["Waived interest", "Waiver reduces receivable interest. It is not cash earned, so it is not added to group gain and not distributed to members."],
-    ["Profit distribution", "Group gain is distributed after completion using member share weight. Loan interest uses the share amount held from loan distribution till repayment; new savings after loan date are not counted for that loan."],
-    ["Group daily reconciliation", "Opening balance + completed collections + interest/penalty/other income - loan disbursement - withdrawals - group expenses = closing balance."],
-    ["Member reconciliation", "Opening share + savings + distributed gain - withdrawals - expense share - outstanding loan/interest/penalty + completed corrections = closing share."],
-    ["Transaction reconciliation", "Header amount must equal sum of line splits. For expense, expense header must equal expense category line total."],
-    ["Loan reconciliation", "Opening loan outstanding + new disbursement + interest/penalty charged - principal/interest/penalty paid - waiver = closing outstanding."]
+function QaGuide() {
+  const questions = [
+    ["Where should I start after login?", "First create or select a group, add members, set group setup, set approvers/admins, open the current period, then start entering transactions."],
+    ["What is group setup?", "Group setup stores common rules like monthly saving, interest rate, penalty after due date, loan limit, loan tenure and repayment due date."],
+    ["What is member setup?", "Member setup is used only when one member has different saving amount, loan limit, interest rate or loan tenure from the group default. Email, mobile and profile details are optional."],
+    ["What is approval setup?", "Approval setup decides who must approve setup changes, transactions, loans, withdrawals and corrections before they affect dashboards."],
+    ["Why should I set at least one admin?", "An active admin is needed to manage setup, members, operations and approvals. The app blocks setup changes if no active admin remains."],
+    ["How do members login?", "Members can login only when their email is added. Email is optional, but for member app access add the member email and ask them to register with the same email."],
+    ["Can I add old notebook data?", "Yes. Use the calculator for old data. Enter migration date and old balances, calculate per-member share, then post that share as Saving from Transactions."],
+    ["Should I use legacy data setup for a new group?", "No. If the group is new and has no previous balances, skip this and start with period setup and transactions."],
+    ["What does old saving/share mean?", "It is the member's old saved amount or calculated share from old records. Post it as a completed Saving transaction so dashboards include it."],
+    ["What does old pending loan mean?", "It means old loan principal still to be paid by the member. Use it while calculating the legacy share and future dues."],
+    ["When should I open a period?", "Open the month where entries are allowed. Transactions are expected to be posted only in the open period."],
+    ["Why is my transaction blocked?", "Usually because no period is open, the date is outside the open period, required setup is missing, or the record is not yet persisted in Supabase."],
+    ["How does transaction split work?", "When you enter collected amount, the app splits it into savings, interest, penalty, principal and excess based on dues. You can edit splits, but total cannot exceed collected amount."],
+    ["What is excess amount?", "Excess is the remaining amount after other split fields. It cannot be negative and it should not make total split greater than collected amount."],
+    ["Why are pending approvals not shown in dashboard totals?", "Pending entries are not final. Dashboard values update only after approval is Completed."],
+    ["Who can approve requests?", "Configured approvers can approve assigned requests. Group admins can also view group approval requests and see with whom they are pending."],
+    ["What happens when a member is added with approvers configured?", "The member is shown as pending/inactive until all required approvals are completed. After approval, the member becomes active."],
+    ["How does loan request work?", "A member or admin creates a loan request. If approvals are configured, the loan becomes active only after approval."],
+    ["How is minimum EMI principal decided?", "Minimum principal due is based on loan tenure. Original loan principal is divided by tenure months, capped by remaining outstanding principal."],
+    ["What if loan tenure is blank or zero?", "Then there is no minimum principal restriction. The member can still pay principal, but the app will not force a minimum principal due."],
+    ["Does member loan tenure override group tenure?", "Yes. If member tenure is set, it overrides group tenure for that member."],
+    ["How is EMI cycle decided?", "The repayment due date creates the EMI cycle. For example, due date 5 July means the cycle runs from 6 June to 5 July."],
+    ["If a member pays before due date, will due become zero?", "Yes, if the full saving, principal, interest and penalty due for that EMI cycle are paid before the due date, next due shows zero for that cycle."],
+    ["When is penalty added?", "Penalty is added only after the due date passes and the EMI cycle still has unpaid due."],
+    ["Can penalty be waived?", "Yes. Go to Waivers, select Penalty, enter the waiver amount and reason. If approvers are set, waiver affects dues only after approval."],
+    ["Can interest be waived?", "Yes. Use Waivers and select Interest. Waived interest reduces receivable interest and is not treated as group gain."],
+    ["What is withdrawal?", "Withdrawal is money taken out from a member's savings/share. Members can request it; admins can also create requests depending on role."],
+    ["What if I entered a wrong transaction?", "Use Adjustment for a partial correction. Use Reversal when the full transaction is wrong or duplicated."],
+    ["Why not edit old approved transactions directly?", "Approved records are audit records. Corrections are posted separately so the history remains clear."],
+    ["What is group gain?", "Group gain is income such as interest, penalty and other income after completion. It can be distributed to members based on group rules."],
+    ["What is member share?", "Member share is the member's savings plus distributed gain minus expenses, withdrawals and outstanding loan-related dues."],
+    ["Why does a dashboard value change after approval?", "Because the app counts only Completed financial entries. Approval completion moves the entry into final dashboard totals."],
+    ["How do I generate report?", "Open Reports, choose start date and end date, click Generate Report, then use Copy / Share report to send the readable summary."],
+    ["Why is my report empty for a member?", "If the member had no transactions or loans in the selected date range, that member may not appear in the range report."],
+    ["What should I do before deploying or refreshing?", "Save setup changes, confirm approvals if required, and make sure Supabase migrations are applied when new database fields are added."],
+    ["Why did approver disappear after refresh earlier?", "That happened when approvers were not persisted to the database. After the persistence fix and migration, saved approvers should load after refresh."],
+    ["What should I check if a payment value looks wrong?", "Check whether the period is correct, approval is completed, transaction split total matches collected amount, and any correction or waiver has been approved."],
+    ["Can I use the app without approvers?", "Yes. If no approvers are configured, entries can complete immediately. For safer workflow, configure approvers."],
+    ["What is the safest daily process?", "Open period, collect money, verify split, save transaction, approve if required, check dashboard, and review pending dues."],
+    ["Where can members see their own dues?", "Members can use their dashboard, pending dues, loans and notifications to see savings due, EMI due, due date and loan details."]
   ];
   return (
     <div className="guide-content">
-      <Section title="Formula Rules">
+      <Section title="Questions & Answers">
         <div className="guide-screen-grid">
-          {formulas.map(([title, body]) => (
-            <article className="guide-screen" key={title}>
+          {questions.map(([question, answer]) => (
+            <article className="guide-screen" key={question}>
               <div className="guide-screen-top"><span /><span /><span /></div>
-              <strong>{title}</strong>
-              <p>{body}</p>
+              <strong>{question}</strong>
+              <p>{answer}</p>
             </article>
           ))}
         </div>
@@ -1175,13 +1221,69 @@ function FormulaGuide() {
 }
 
 function GuideContent() {
+  const setupJourney = [
+    {
+      title: "1. Create or select group",
+      text: "Start with one group. Confirm group name, monthly saving, interest rate, loan limit, loan tenure and EMI due date. If approvers are added, check the status at the bottom and wait until setup is Completed.",
+      path: "/setup/group",
+      action: "Open group setup"
+    },
+    {
+      title: "2. Add members",
+      text: "Add every member with correct name and username. Email and mobile are optional. Add email only when the member needs login access. If approval is enabled, member is usable only after status becomes Completed/Active.",
+      path: "/members",
+      action: "Add members"
+    },
+    {
+      title: "3. Set approvers and admins",
+      text: "Choose approvers for loans, transactions and corrections. Choose admins who can manage setup and operations. Save and confirm that the setup approval is Completed before depending on the workflow.",
+      path: "/setup/approval",
+      action: "Set approvals"
+    },
+    {
+      title: "4. Open the period",
+      text: "Open the month where entries are allowed. Transactions should be posted only in the open period. If period changes need approval, check status and continue only after Completed.",
+      path: "/setup/periods",
+      action: "Open period"
+    },
+    {
+      title: "5. Calculate old legacy share",
+      text: "If old notebook data exists, use the calculator with migration date, remaining account money, outstanding loan, savings and member count. Check how much amount should be shared per member. Then go to Transactions, select each member, enter that calculated share as Saving, save it, and use only Completed transactions in dashboards.",
+      path: "/setup/calculator",
+      action: "Calculate legacy share"
+    },
+    {
+      title: "6. Start collections",
+      text: "Go to Transactions, select member, enter collected amount, check the split, then save. If approvers are configured, check the transaction status at the bottom/list. It affects dashboard only after Completed.",
+      path: "/operations/transactions",
+      action: "Create transaction"
+    },
+    {
+      title: "7. Correct mistakes if any",
+      text: "If any saved entry is wrong, use Corrections. Use Adjustment for a small split/amount difference and Reversal for a fully wrong or duplicate transaction. Correction also counts only after Completed approval status.",
+      path: "/corrections",
+      action: "Open corrections"
+    },
+    {
+      title: "8. Handle loans and withdrawals",
+      text: "Members can request loans or withdrawals. Admins and approvers can review, approve and track EMI dues. Loan and withdrawal requests should be checked until status becomes Completed/Active.",
+      path: "/operations/loans",
+      action: "Open loans"
+    },
+    {
+      title: "9. Review reports",
+      text: "Generate reports by date range, copy/share the readable summary, and use audit/corrections for mistakes. Reports and dashboards should be verified from Completed entries only.",
+      path: "/reports",
+      action: "Generate report"
+    }
+  ];
   const flows = [
     ["Register", "Create group", "Add members", "Open period"],
     ["Group setup", "Member setup", "Loan setup", "Approver setup"],
-    ["Choose member", "Enter old balance", "Check loan/expense", "Migrate"],
-    ["Enter savings", "System splits amount", "Approver checks", "Dashboard updates"],
+    ["Enter legacy values", "Calculate per member share", "Post as saving transaction", "Approve to Completed"],
+    ["Enter savings", "System splits amount", "Approver checks", "Completed updates dashboard"],
     ["Member asks loan", "Admin/approver approves", "Loan active", "Repay monthly"],
-    ["Wrong entry", "Use correction", "Adjustment / Reverse", "Audit saved"]
+    ["Wrong entry", "Use correction", "Adjustment / Reverse", "Completed audit saved"]
   ];
   const fullFlow = [
     "Register",
@@ -1191,8 +1293,9 @@ function GuideContent() {
     "Group setup",
     "Member setup",
     "Financial setup",
-    "Legacy migration if old data",
+    "Calculate legacy share if old data",
     "Transactions",
+    "Correction if any",
     "Approval flow",
     "Loan request",
     "Loan approval",
@@ -1213,6 +1316,21 @@ function GuideContent() {
 
   return (
     <div className="guide-content">
+      <section className="section">
+        <h3>Step-by-step setup guide</h3>
+        <p className="section-note">Follow these steps from top to bottom. Each button opens the exact screen needed for that step.</p>
+        <div className="guide-screen-grid">
+          {setupJourney.map((step) => (
+            <article className="guide-screen" key={step.title}>
+              <div className="guide-screen-top"><span /><span /><span /></div>
+              <strong>{step.title}</strong>
+              <p>{step.text}</p>
+              <NavLink className="secondary-button" to={step.path}>{step.action}</NavLink>
+            </article>
+          ))}
+        </div>
+      </section>
+
       <section className="section">
         <h3>Complete Flow</h3>
         <div className="guide-flow guide-flow-long">
@@ -1261,7 +1379,7 @@ function GuideContent() {
           <article className="guide-screen"><div className="guide-screen-top"><span /><span /><span /></div><strong>Active / inactive</strong><p>Deactivate members who leave. They do not get future gains after exit.</p></article>
           <article className="guide-screen"><div className="guide-screen-top"><span /><span /><span /></div><strong>Role restriction</strong><p>Members get view access. Admins manage setup, members, transactions and loans.</p></article>
           <article className="guide-screen"><div className="guide-screen-top"><span /><span /><span /></div><strong>Wrong entries</strong><p>Use adjustment for partial correction. Use reversal for a fully wrong entry.</p></article>
-          <article className="guide-screen"><div className="guide-screen-top"><span /><span /><span /></div><strong>Approvals</strong><p>If approvers are defined, transactions, loans, migration and corrections wait for approval.</p></article>
+          <article className="guide-screen"><div className="guide-screen-top"><span /><span /><span /></div><strong>Approvals</strong><p>If approvers are defined, setup, transactions, loans, withdrawals and corrections wait for approval. Count them only after status is Completed.</p></article>
           <article className="guide-screen"><div className="guide-screen-top"><span /><span /><span /></div><strong>Withdrawal</strong><p>Members request for themselves. Admin can request for any member. Approval is required if approvers exist.</p></article>
         </div>
       </section>
@@ -1282,15 +1400,15 @@ function GuideContent() {
       </section>
 
       <section className="section">
-        <h3>Legacy Migration</h3>
+        <h3>Legacy Data Setup</h3>
         <div className="guide-flow">
           {flows[2].map((step, index) => <GuideStep key={step} number={index + 1} label={step} />)}
         </div>
         <div className="guide-symbol-row guide-setup-notes">
-          <span>Use migration when shifting old notebook/register balance to this app</span>
-          <span>Saving balance means member's old saved amount</span>
-          <span>Pending loan means old loan still to be paid</span>
-          <span>Old expense/gain is split so member share stays correct</span>
+          <span>Use the calculator when shifting old notebook/register balance to this app</span>
+          <span>Select the migration date and enter old account balance, loans, savings and member count</span>
+          <span>Use the calculated per-member share as Saving in the Transactions screen</span>
+          <span>If approvers are configured, dashboard should be checked only after those legacy saving transactions are Completed</span>
         </div>
       </section>
 
@@ -1325,7 +1443,7 @@ function GuideContent() {
         </div>
       </section>
 
-      <GuideFormulaSection />
+      <GuideQaSection />
 
       <section className="section">
         <h3>Remember</h3>
@@ -1333,40 +1451,61 @@ function GuideContent() {
           <span>Save money</span>
           <span>Check loan</span>
           <span>Approve safely</span>
-          <span>Use reports</span>
+          <span>Use only Completed records for dashboards and reports</span>
         </div>
       </section>
     </div>
   );
 }
 
-function GuideFormulaSection() {
-  const formulas = [
-    ["Total savings", "Completed savings + completed excess savings + migrated savings"],
-    ["This month collection", "Savings + principal collected + interest collected + penalty collected"],
-    ["Remaining balance", "Total collected - active loan outstanding - group expenses"],
-    ["Group gain", "Interest collected + penalty collected + other income"],
-    ["Member savings", "Member completed savings + excess savings. Expenses are shown separately."],
-    ["Member expense", "Member's share of group expenses"],
-    ["Member gain", "Loan interest share + penalty share + other income share based on share weight"],
-    ["Member share amount", "Savings + member gain - member expense - outstanding loan/interest/penalty"],
-    ["Loan interest reducing", "Outstanding principal x monthly rate x days / 30 / 100"],
-    ["Loan interest flat", "Original loan amount x monthly rate x days / 30 / 100"],
-    ["Loan eligibility", "Minimum of account balance and member/group loan limit"],
-    ["Loan interest distribution", "Interest x member capital-time weight / total capital-time weight"],
-    ["Penalty distribution", "Penalty x member share weight / total share weight"],
-    ["Other income distribution", "Other income x member share weight / total share weight"],
-    ["Next minimum due", "Monthly saving + interest till due date + pending penalty"]
+function GuideQaSection() {
+  const questions = [
+    ["How do I know which screen to open first?", "Use the step-by-step setup guide at the top of this page. Start with group setup, then members, approvals, period, optional legacy calculator and transactions."],
+    ["Why are there many setup screens?", "Each setup screen controls one area: group rules, member overrides, approvers, admins, loan settings, periods and share calculator."],
+    ["Can I skip legacy data setup?", "Yes. Skip it if your group is new or you do not want to bring old balances into the app."],
+    ["How should I add old legacy savings?", "Use the calculator first. Enter migration date and old balances, calculate the per-member share, then post that amount as Saving from the Transactions screen for each member."],
+    ["When will old legacy savings affect dashboards?", "Only after the saving transaction is Completed. If approvers are configured, wait for approval before checking dashboard or reports."],
+    ["Can I change setup later?", "Yes. Setup changes can be saved later. If approvers are configured, changes may wait for approval before becoming final."],
+    ["How do I know a request is pending?", "Pending screens show status and pending approver. The approval page also shows who needs to approve."],
+    ["Why does the app show both Marathi and English labels?", "It helps local users understand field names while keeping finance terms clear for reports and support."],
+    ["What should I do when a member leaves?", "Mark the member inactive or set exit details. They should not receive future gains after exit."],
+    ["Can a member have different saving amount?", "Yes. Use Member Setup to set a custom monthly saving for that member."],
+    ["Can a member have different loan tenure?", "Yes. Member loan tenure overrides group loan tenure."],
+    ["What does loan limit mean?", "Loan limit controls the maximum loan a member can request or receive, depending on group and member setup."],
+    ["What is repayment due date?", "It is the monthly EMI due date. The app uses it to decide EMI cycle, due date and late penalty."],
+    ["Why is penalty not added immediately?", "Penalty is added only after the due date passes and that EMI cycle is still unpaid."],
+    ["Can a member pay before due date?", "Yes. Early payment is counted for that EMI cycle."],
+    ["What if only part payment is made?", "The paid split reduces that cycle's due. Remaining due continues to show, and penalty can apply after due date."],
+    ["Can I enter only interest payment?", "Yes, if the split is valid and total split does not exceed amount collected."],
+    ["Can I enter only principal payment?", "Yes. You can edit split, but total split cannot be more than collected amount and principal cannot exceed outstanding principal."],
+    ["What is pending dues page for?", "It shows members who still have saving, principal, interest or penalty due for current or previous EMI cycles."],
+    ["What should collectors check before saving?", "Check member, date, amount, allocation split and approval status."],
+    ["What happens if split total is greater than collected amount?", "The app blocks it. Excess is recalculated from the remaining amount and cannot be negative."],
+    ["Why is dashboard not changing after I saved?", "If approvals are enabled, dashboard changes after approval completion, not at pending stage."],
+    ["Where do admins approve?", "Open Approvals. Admins can see group approval requests, and assigned approvers can approve their own requests."],
+    ["What if approver cannot see request?", "Check that approver is saved in setup, migration for approver persistence is applied, and the user is logged in with the approver's member email."],
+    ["Can I reject a request?", "Yes. Approvers can approve, reject or return depending on the workflow action."],
+    ["How do reports work?", "Reports use selected start and end dates. They show only activity available in that range."],
+    ["Can I share a report on WhatsApp?", "Yes. Use Copy / Share report. The text is formatted in readable lines."],
+    ["How do I fix a duplicate transaction?", "Use Reversal to cancel the full wrong entry."],
+    ["How do I fix only one wrong split amount?", "Use Adjustment to post only the difference."],
+    ["Can corrections also require approval?", "Yes. If approvers are configured, adjustments, reversals and waivers can stay pending until approved."],
+    ["What is waiver?", "Waiver reduces payable interest or penalty without treating it as cash collected."],
+    ["Should waived interest become group gain?", "No. Waived interest is not collected money, so it is not group gain."],
+    ["What is active loan?", "Active loan is loan principal still outstanding, with related interest or penalty if applicable."],
+    ["When is loan closed?", "A loan is effectively closed when outstanding principal and related dues are fully paid or cleared."],
+    ["What is the best monthly routine?", "Open period, enter collections, approve pending items, check pending dues, review dashboard and generate report."],
+    ["Who should use Reports & Audit?", "Admins and approvers use it to verify date-range collections, member summaries and audit history."],
+    ["What should I do if numbers look incorrect?", "Check pending approvals, selected date range, migration entries, split details, corrections and period dates before changing formulas."]
   ];
-
   return (
     <section className="section">
-      <h3>Formula Tab</h3>
+      <h3>Common Questions</h3>
       <div className="guide-formula-grid">
-        {formulas.map(([title, formula]) => (
-          <article className="guide-formula" key={title}>
-            <strong>{title}</strong>
-            <p>{formula}</p>
+        {questions.map(([question, answer]) => (
+          <article className="guide-formula" key={question}>
+            <strong>{question}</strong>
+            <p>{answer}</p>
           </article>
         ))}
       </div>
@@ -1748,6 +1887,7 @@ function Dashboard({ role, state, actor, forceGroupView = false, memberPortal = 
             ]),
             metric(memberCards.nextMinimumDue.label, currency.format(memberCards.nextMinimumDue.header ?? 0), CalendarCheck, [
               `Saving due: ${currency.format(memberCards.nextMinimumDue.subfields.savingDue ?? 0)}`,
+              `Principal due: ${currency.format(memberCards.nextMinimumDue.subfields.principalDue ?? 0)}`,
               `Interest due: ${currency.format(memberCards.nextMinimumDue.subfields.interestDue ?? 0)}`,
               `Penalty due: ${currency.format(memberCards.nextMinimumDue.subfields.penaltyDue ?? 0)}`,
               `Due: ${memberCards.nextMinimumDue.subfields.dueDate?.toLocaleDateString("en-IN", { year: "numeric", month: "long", day: "numeric" }) ?? "-"}`
@@ -1769,7 +1909,7 @@ function Dashboard({ role, state, actor, forceGroupView = false, memberPortal = 
               <p>{memberSummary.dueDate.toLocaleDateString("en-IN", { year: "numeric", month: "long", day: "numeric" })}</p>
             </div>
           </div>
-          <p className="section-note">Amount includes remaining loan principal, interest till next month, and any charges.</p>
+          <p className="section-note">Amount includes saving due, tenure-based principal due, interest till next month, and any charges.</p>
         </Section>
         <Section title="Member details">
           <div className="status-row">
@@ -1855,7 +1995,7 @@ function Dashboard({ role, state, actor, forceGroupView = false, memberPortal = 
               row.periodName,
               formatDate(row.dueDate),
               currency.format(row.savingDue),
-              currency.format(row.outstandingPrincipal),
+              currency.format(row.principalDue ?? row.outstandingPrincipal),
               currency.format(row.interestDue),
               currency.format(row.penaltyDue),
               currency.format(row.totalDue)
@@ -2027,21 +2167,40 @@ function isGroupAdminActor(state, actor) {
   return member?.memberRole === roles.GROUP_ADMIN;
 }
 
+function normalizeLookup(value) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+function memberMatchesLookup(member, value) {
+  const needle = normalizeLookup(value);
+  if (!needle) return false;
+  return [member?.id, member?.fullName, member?.username, member?.email]
+    .some((candidate) => normalizeLookup(candidate) === needle);
+}
+
+function isMemberActive(member) {
+  if (!member) return false;
+  if (String(member.status ?? "").toLowerCase() === "inactive") return false;
+  if (member.inactiveDate && String(member.inactiveDate) <= toIsoDateValue()) return false;
+  if (member.exitDate && String(member.exitDate) <= toIsoDateValue()) return false;
+  return true;
+}
+
+function activeMembersForTransactions(members = []) {
+  return (members || []).filter(isMemberActive);
+}
+
 function isMemberNamedAdmin(member, adminNames = []) {
-  const names = new Set((adminNames || []).map((name) => String(name).toLowerCase()));
+  const names = new Set((adminNames || []).map(normalizeLookup));
   return member?.memberRole === roles.GROUP_ADMIN
     || member?.role === roles.GROUP_ADMIN
-    || names.has(String(member?.fullName || "").toLowerCase())
-    || names.has(String(member?.username || "").toLowerCase())
-    || names.has(String(member?.email || "").toLowerCase());
+    || names.has(normalizeLookup(member?.fullName))
+    || names.has(normalizeLookup(member?.username))
+    || names.has(normalizeLookup(member?.email));
 }
 
 function hasActiveAdminMember(members = [], adminNames = []) {
-  return members.some((member) =>
-    member.status !== "Inactive"
-    && !(member.inactiveDate && member.inactiveDate <= toIsoDateValue())
-    && isMemberNamedAdmin(member, adminNames)
-  );
+  return members.some((member) => isMemberActive(member) && isMemberNamedAdmin(member, adminNames));
 }
 
 function getApprovalRecipients(state) {
@@ -2053,7 +2212,7 @@ function getApprovalRecipients(state) {
     }
   });
   return [...names].map((name) => {
-    const member = (state.members || []).find((item) => item.fullName === name || item.username === name);
+    const member = (state.members || []).find((item) => memberMatchesLookup(item, name));
     return {
       id: member?.id ?? name,
       name,
@@ -2066,7 +2225,7 @@ function getConfiguredApprovalRecipients(state) {
   const group = state.groups?.[0] ?? {};
   const names = new Set([...(group.approvers || [])].filter(Boolean));
   return [...names].map((name) => {
-    const member = (state.members || []).find((item) => item.fullName === name || item.username === name);
+    const member = (state.members || []).find((item) => memberMatchesLookup(item, name));
     return {
       id: member?.id ?? name,
       name,
@@ -2162,14 +2321,46 @@ function metric(label, value, Icon, details = []) {
 }
 
 function statusWithPendingApprover(item, approvals = [], explicitReferenceType = null) {
-  const referenceType = explicitReferenceType ?? (item.transactionType === "Group Expense" ? "expense" : item.requestId ? "loan_request" : "transaction");
-  const pending = (approvals || []).filter((approval) =>
-    (String(approval.referenceId) === String(item.id) || String(approval.referenceId) === String(item.requestId))
+  const pending = pendingApprovalsForItem(item, approvals, explicitReferenceType);
+  if (pending.length === 0) return item.approvalStatus || item.status || "";
+  return `${item.approvalStatus || item.status || "Pending"} (pending: ${formatPendingApproverNames(pending)})`;
+}
+
+function approvalReferenceTypeForItem(item, explicitReferenceType = null) {
+  return explicitReferenceType ?? (item.transactionType === "Group Expense" ? "expense" : item.requestId ? "loan_request" : "transaction");
+}
+
+function pendingApprovalsForItem(item, approvals = [], explicitReferenceType = null) {
+  const referenceType = approvalReferenceTypeForItem(item, explicitReferenceType);
+  return (approvals || []).filter((approval) =>
+    (String(approval.referenceId) === String(item?.id) || String(approval.referenceId) === String(item?.requestId))
     && approval.referenceType === referenceType
     && approval.status === "Pending"
   );
-  if (pending.length === 0) return item.approvalStatus || item.status || "";
-  return `${item.approvalStatus || item.status || "Pending"} (pending: ${pending.map((approval) => approval.approverName || approval.level).join(", ")})`;
+}
+
+function formatPendingApproverNames(pendingApprovals = []) {
+  const names = pendingApprovals
+    .map((approval) => approval.approverName || approval.level)
+    .filter(Boolean);
+  return names.length ? names.join(", ") : "No pending approver";
+}
+
+function approvalBatchFor(approval, approvals = []) {
+  if (!approval?.batchId) return approval ? [approval] : [];
+  return (approvals || []).filter((item) => item.batchId === approval.batchId);
+}
+
+function isApprovalAssignedToActor(approval, actor, actorMembers = []) {
+  const actorLookupValues = new Set([
+    actor?.memberId,
+    actor?.name,
+    actor?.username,
+    actor?.email,
+    ...actorMembers.flatMap((member) => [member.id, member.fullName, member.username, member.email])
+  ].map(normalizeLookup).filter(Boolean));
+  return actorLookupValues.has(normalizeLookup(approval?.approverId))
+    || actorLookupValues.has(normalizeLookup(approval?.approverName));
 }
 
 function describeChanges(before = {}, after = {}, labels = {}) {
@@ -2553,21 +2744,24 @@ function Members({ state, setState, actor, setConfirmDialog, setNotification }) 
     const result = validate(memberSchema, validatedValues);
 
     const duplicate = state.members.find((member) =>
-      member.email === normalizedEmail || member.mobile === normalizedMobile || member.username?.toLowerCase() === username.toLowerCase()
+      (normalizedEmail && member.email === normalizedEmail)
+      || (normalizedMobile && member.mobile === normalizedMobile)
+      || member.username?.toLowerCase() === username.toLowerCase()
     );
 
     const nextErrors = {
       ...result.errors,
       ...(duplicate ? {
-        email: "Email or mobile already exists",
-        mobile: "Email or mobile already exists",
-        username: "Username must be unique in this group"
+        ...(normalizedEmail && duplicate.email === normalizedEmail ? { email: "Email already exists" } : {}),
+        ...(normalizedMobile && duplicate.mobile === normalizedMobile ? { mobile: "Mobile already exists" } : {}),
+        ...(duplicate.username?.toLowerCase() === username.toLowerCase() ? { username: "Username must be unique in this group" } : {})
       } : {})
     };
 
     setErrors(nextErrors);
     if (!result.data || duplicate) return;
 
+    const hasGroupApprovers = getConfiguredApprovalRecipients(state).length > 0;
     const localMember = {
       id: makeId("mem"),
       ...result.data,
@@ -2577,7 +2771,8 @@ function Members({ state, setState, actor, setConfirmDialog, setNotification }) 
       nominee: "",
       aadhaar: "",
       pan: "",
-      status: "Active",
+      status: hasGroupApprovers ? "Inactive" : "Active",
+      approvalStatus: hasGroupApprovers ? "Pending" : "Completed",
       savings: 0,
       loanOutstanding: 0,
       shares: 0
@@ -2592,8 +2787,9 @@ function Members({ state, setState, actor, setConfirmDialog, setNotification }) 
 
     const primaryGroupId = state.groups[0]?.id;
     const activePlan = getGroupPlan(state, primaryGroupId);
-    if (Number.isFinite(activePlan.maxMembers) && state.members.length >= activePlan.maxMembers) {
-      setNotification({ type: "error", message: `Free plan allows ${activePlan.maxMembers} members only. Please subscribe to add more members.` });
+    const activeMemberCount = activeMembersForTransactions(state.members || []).length;
+    if (Number.isFinite(activePlan.maxMembers) && activeMemberCount >= activePlan.maxMembers) {
+      setNotification({ type: "error", message: `Free plan allows ${activePlan.maxMembers} active members only. Make a member inactive or subscribe to add more active members.` });
       return;
     }
     if (!isUuid(primaryGroupId)) {
@@ -2609,26 +2805,44 @@ function Members({ state, setState, actor, setConfirmDialog, setNotification }) 
         setConfirmDialog(null);
         try {
           const createdMember = await repository.createMember(localMember, primaryGroupId);
-          setState((current) => audit({
-            state: {
-              ...current,
-              members: [createdMember, ...current.members],
-              approvals: (state.groups[0]?.approvers?.length > 0) ? [{
-                id: makeId('apr'),
-                action: 'Member addition',
+          const approvalRecords = hasGroupApprovers
+            ? createConfiguredApprovalRecords({
+                state,
+                action: "Approve member addition",
                 requester: actor.name,
-                level: 'Level 1',
-                status: 'Pending',
-                amount: null
-              }, ...current.approvals] : current.approvals
-            },
+                amount: 0,
+                referenceId: createdMember.id,
+                referenceType: "member_addition",
+                details: `Add member ${createdMember.fullName} (${createdMember.username || createdMember.email || "-"})`
+              })
+            : [];
+          const persistedApprovals = approvalRecords.length && repository.isConfigured()
+            ? await repository.createApprovalRequests({ groupId: primaryGroupId, approvals: approvalRecords })
+            : approvalRecords;
+          const memberForState = hasGroupApprovers
+            ? { ...createdMember, status: "Inactive", approvalStatus: "Pending" }
+            : createdMember;
+          setState((current) => audit({
+            state: addGroupNotification({
+              ...current,
+              members: [memberForState, ...current.members],
+              approvals: [...persistedApprovals, ...current.approvals]
+            }, hasGroupApprovers ? {
+              title: "Member addition approval requested",
+              body: `${actor.name} requested approval to add ${createdMember.fullName}. Pending with ${approvalRecords.map((approval) => approval.approverName || approval.level).join(", ")}.`,
+              type: "info"
+            } : {
+              title: "Member added",
+              body: `${createdMember.fullName} was added to the group.`,
+              type: "success"
+            }),
             actor,
-            action: 'create',
+            action: hasGroupApprovers ? "request" : "create",
             tableName: 'group_members',
             recordId: createdMember.id,
-            newValue: createdMember
+            newValue: memberForState
           }));
-          setNotification({ type: 'success', message: 'Member saved to backend.' });
+          setNotification({ type: 'success', message: hasGroupApprovers ? 'Member addition sent for approval.' : 'Member saved to backend.' });
           setTimeout(() => setNotification(null), 3000);
         } catch (error) {
           console.error('Create member failed', error);
@@ -2643,8 +2857,6 @@ function Members({ state, setState, actor, setConfirmDialog, setNotification }) 
       }
     });
     return;
-
-    const hasGroupApprovers = state.groups[0]?.approvers?.length > 0;
 
     setState((current) => audit({
       state: {
@@ -2676,7 +2888,7 @@ function Members({ state, setState, actor, setConfirmDialog, setNotification }) 
         <Field label="Email" type="email" value={values.email} onChange={(value) => setValues({ ...values, email: value })} error={errors.email} />
         <Field label="Mobile" type="tel" value={values.mobile} onChange={(value) => setValues({ ...values, mobile: value })} error={errors.mobile} />
         <Field label="Username" value={values.username} onChange={(value) => setValues({ ...values, username: value })} error={errors.username} required />
-        <div className="section-note">After adding the member, ask them to register with their email. Once they sign in with that email, they will see only the groups they belong to.</div>
+        <div className="section-note">Email and mobile are optional. If you want the member to login later, add their email and ask them to register with the same email.</div>
       </FormCard>
       <Table
         headers={["Member", "Email", "Mobile", "Username", "Savings", "Loan", "Status"]}
@@ -2689,7 +2901,7 @@ function Members({ state, setState, actor, setConfirmDialog, setNotification }) 
             member.username,
             currency.format(summary.savings),
             currency.format(summary.outstanding),
-            member.status
+            statusWithPendingApprover({ id: member.id, approvalStatus: member.approvalStatus ?? member.status }, state.approvals, "member_addition")
           ];
         })}
       />
@@ -3019,6 +3231,7 @@ function SetupPage({ state, setState, actor, selectedGroup, initialSetupTab = "g
     interestRate: blankIfUnset(group?.interestRate),
     monthlySaving: blankIfUnset(group?.monthlySaving),
     maximumLoanLimit: blankIfUnset(group?.maximumLoanLimit),
+    penaltyAmount: blankIfUnset(group?.penaltyAfterDueDateAmount ?? group?.penaltyAmount),
     loanInterestStartMode: group?.loanInterestStartMode ?? "disbursement",
     loanTenureMonths: blankIfUnset(group?.loanTenureMonths),
     loanDueDay: group?.loanDueDay ?? 1,
@@ -3200,6 +3413,8 @@ function SetupPage({ state, setState, actor, selectedGroup, initialSetupTab = "g
             loanTenureMonths: optionalNumber(groupValues.loanTenureMonths),
             loanDueDay: Number(groupValues.loanDueDay || 1),
             maximumLoanLimit: optionalNumber(groupValues.maximumLoanLimit),
+            penaltyAmount: optionalNumber(groupValues.penaltyAmount),
+            penaltyAfterDueDateAmount: optionalNumber(groupValues.penaltyAmount),
             loanEligibilityRules: { monthlySaving: optionalNumber(groupValues.monthlySaving) },
             financialYear: groupValues.financialYear,
             approvers: groupValues.approvers,
@@ -3212,6 +3427,7 @@ function SetupPage({ state, setState, actor, selectedGroup, initialSetupTab = "g
             loanTenureMonths: payload.loanTenureMonths,
             loanDueDay: payload.loanDueDay,
             maximumLoanLimit: payload.maximumLoanLimit,
+            penaltyAmount: payload.penaltyAmount,
             approvers: payload.approvers,
             admins: payload.admins
           };
@@ -3222,6 +3438,7 @@ function SetupPage({ state, setState, actor, selectedGroup, initialSetupTab = "g
             loanTenureMonths: "Loan tenure",
             loanDueDay: "Repayment due date",
             maximumLoanLimit: "Loan limit",
+            penaltyAmount: "Penalty amount after due date",
             approvers: "Approvers",
             admins: "Admins"
           });
@@ -3758,6 +3975,12 @@ function SetupPage({ state, setState, actor, selectedGroup, initialSetupTab = "g
             onChange={(value) => setGroupValues({ ...groupValues, maximumLoanLimit: value })}
           />
           <Field
+            label="Penalty amount after due date"
+            type="number"
+            value={groupValues.penaltyAmount}
+            onChange={(value) => setGroupValues({ ...groupValues, penaltyAmount: value })}
+          />
+          <Field
             label="Loan tenure (months)"
             type="number"
             value={groupValues.loanTenureMonths}
@@ -3770,6 +3993,7 @@ function SetupPage({ state, setState, actor, selectedGroup, initialSetupTab = "g
             onChange={(value) => setGroupValues({ ...groupValues, loanDueDay: value })}
           />
           <p className="section-note">Set the group financial defaults used for loan and savings calculations.</p>
+          <p className="section-note">Penalty amount is optional. Blank value is treated as ₹0. Minimum principal due is derived from loan tenure: original loan principal divided by tenure months. Member tenure overrides group tenure. Blank or 0 tenure means no minimum principal restriction.</p>
           <p className="section-note">Loan tenure 0 or blank means there is no fixed payback time limit.</p>
           <p className="section-note">Repayment due date defaults to 1, meaning the first date of each month. Use day 1 to 28.</p>
         </FormCard>
@@ -4910,19 +5134,21 @@ function SetupPage({ state, setState, actor, selectedGroup, initialSetupTab = "g
       )}
       </div>
       </div>
-      <Section title="Pending setup approvals">
-        <Table
-          headers={["Setup", "Change", "Status", "Pending with", "Requested"]}
-          rows={pendingSetupRows.map((change) => [
-            `${getSetupChangeTypeLabel(change.setupType)} / ${change.targetName || ""}`,
-            change.changeSummary || "",
-            change.status || "Pending",
-            change.pendingWith,
-            change.createdAt ? new Date(change.createdAt).toLocaleString("en-IN") : ""
-          ])}
-        />
-        {pendingSetupRows.length === 0 && <p className="section-note">No setup changes are pending approval.</p>}
-      </Section>
+      {financialTab !== "calculator" && (
+        <Section title="Pending setup approvals">
+          <Table
+            headers={["Setup", "Change", "Status", "Pending with", "Requested"]}
+            rows={pendingSetupRows.map((change) => [
+              `${getSetupChangeTypeLabel(change.setupType)} / ${change.targetName || ""}`,
+              change.changeSummary || "",
+              change.status || "Pending",
+              change.pendingWith,
+              change.createdAt ? new Date(change.createdAt).toLocaleString("en-IN") : ""
+            ])}
+          />
+          {pendingSetupRows.length === 0 && <p className="section-note">No setup changes are pending approval.</p>}
+        </Section>
+      )}
     </Page>
     </>
   );
@@ -4985,8 +5211,9 @@ function Periods({ state, setState, actor, setConfirmDialog, setNotification }) 
 }
 
 function Transactions({ state, setState, actor, setSelectedGroupId, setConfirmDialog, setNotification }) {
+  const activeTransactionMembers = activeMembersForTransactions(state.members || []);
   const [values, setValues] = useState({
-    memberId: state.members[0]?.id ?? "",
+    memberId: activeTransactionMembers[0]?.id ?? "",
     amount: "",
     transactionDate: toIsoDateValue(),
     transactionType: "Savings Collection"
@@ -5019,7 +5246,7 @@ function Transactions({ state, setState, actor, setSelectedGroupId, setConfirmDi
   const paymentDate = new Date(values.transactionDate);
   const dueDateForPayment = getLoanDueDate(state.groups[0]);
   const setup = getEffectiveMemberSetup(member, state.groups[0] ?? {});
-  const latePenalty = memberActiveLoans.length > 0 && paymentDate > dueDateForPayment ? Number(state.groups[0]?.penaltyAmount || 0) : 0;
+  const latePenalty = memberActiveLoans.length > 0 && paymentDate > dueDateForPayment ? Number(setup.penaltyAfterDueDateAmount || 0) : 0;
   const penaltyPaidTillDate = member ? allocationPaidForMember(state, member.id, "penalty", { untilDate: values.transactionDate }) : 0;
   const penaltyWaivedTillDate = member ? allocationWaivedForMember(state, member.id, "penalty", { untilDate: values.transactionDate }) : 0;
   const totalPenaltyOutstanding = Math.max(0, memberActiveLoans.reduce((sum, item) => sum + Number(item.penaltyOutstanding || 0), 0) + Number(member?.penaltyOutstanding || 0) + latePenalty - penaltyPaidTillDate - penaltyWaivedTillDate);
@@ -5043,6 +5270,13 @@ function Transactions({ state, setState, actor, setSelectedGroupId, setConfirmDi
     setAllocationEditing(false);
     setAllocationErrors({});
   }, [values.amount]);
+
+  useEffect(() => {
+    if (isGroupExpense) return;
+    if (!member || !isMemberActive(member)) {
+      setValues((current) => ({ ...current, memberId: activeTransactionMembers[0]?.id ?? "" }));
+    }
+  }, [isGroupExpense, member?.id, member?.status, member?.inactiveDate, activeTransactionMembers.length]);
 
   useEffect(() => {
     if (!isGroupExpense) return;
@@ -5072,32 +5306,38 @@ function Transactions({ state, setState, actor, setSelectedGroupId, setConfirmDi
   }
   
   function handleAllocationChange(key, newValue) {
+    const collectedAmount = Number(values.amount) || 0;
+    const editableBuckets = ["savings", "interest", "penalty", "principal"];
     let nextValue = Math.max(0, Number(newValue) || 0);
+    const otherEditableTotal = editableBuckets
+      .filter((bucket) => bucket !== key)
+      .reduce((sum, bucket) => sum + Number(allocation[bucket] || 0), 0);
+    nextValue = Math.min(nextValue, Math.max(0, collectedAmount - otherEditableTotal));
     if (key === "interest") {
       nextValue = Math.min(nextValue, maxInterestDue);
     }
     if (key === "principal") {
       nextValue = Math.min(nextValue, maxPrincipalDue);
     }
-    const updated = { ...allocation };
-    let diff = nextValue - Number(updated[key] || 0);
+    const updated = { ...allocation, excess: 0 };
     updated[key] = nextValue;
-    if (diff > 0) {
-      for (const bucket of ["excess", "principal", "interest", "savings"]) {
-        if (bucket === key || diff <= 0) continue;
-        const reduction = Math.min(Number(updated[bucket] || 0), diff);
-        updated[bucket] = Number(updated[bucket] || 0) - reduction;
-        diff -= reduction;
-      }
-    } else if (diff < 0) {
-      updated.excess = Number(updated.excess || 0) + Math.abs(diff);
-    }
+    const usedTotal = editableBuckets.reduce((sum, bucket) => sum + Number(updated[bucket] || 0), 0);
+    updated.excess = Math.max(0, collectedAmount - usedTotal);
+    const nextTotal = usedTotal + Number(updated.excess || 0);
+    setAllocationErrors(nextTotal > collectedAmount + 0.01
+      ? { total: `Split total cannot be more than amount collected ${currency.format(collectedAmount)}.` }
+      : {}
+    );
     setEditableAllocation(updated);
   }
   
   function validateAllocation() {
     const allocationTotal = Object.values(allocation).reduce((sum, val) => sum + val, 0);
     const collectedAmount = Number(values.amount) || 0;
+    if (allocationTotal > collectedAmount + 0.01) {
+      setAllocationErrors({ total: `Split total (${currency.format(allocationTotal)}) cannot be more than amount collected (${currency.format(collectedAmount)}).` });
+      return false;
+    }
     if (Number(allocation.interest || 0) > maxInterestDue + 0.01) {
       setAllocationErrors({ total: `Interest cannot be more than calculated due ${currency.format(maxInterestDue)}.` });
       return false;
@@ -5128,6 +5368,12 @@ function Transactions({ state, setState, actor, setSelectedGroupId, setConfirmDi
     if (!result.data || !periodResult.allowed) return;
     if (!isGroupExpense && !member) {
       setErrors((current) => ({ ...current, memberId: "Create or select a member first." }));
+      return;
+    }
+    if (!isGroupExpense && !isMemberActive(member)) {
+      setErrors((current) => ({ ...current, memberId: "Inactive members cannot have new transactions." }));
+      setNotification({ type: "error", message: "Inactive members cannot have savings, repayment, interest, penalty or other transactions." });
+      setTimeout(() => setNotification(null), 4000);
       return;
     }
     if (isGroupExpense) {
@@ -5333,7 +5579,7 @@ function Transactions({ state, setState, actor, setSelectedGroupId, setConfirmDi
               category: expenseLines[0]?.category?.trim() || "General",
               remarks: expenseLines.map((line) => line.remarks).filter(Boolean).join("; ") || "Group expense"
             });
-            const activeMembers = (state.members || []).filter((item) => item.status !== "Inactive");
+            const activeMembers = activeMembersForTransactions(state.members || []);
             const expenseAmount = Number(result.data.amount);
             let remainingExpenseShare = expenseAmount;
             const adjustmentTransactions = [];
@@ -5389,7 +5635,7 @@ function Transactions({ state, setState, actor, setSelectedGroupId, setConfirmDi
               newValue: createdExpense
             }));
             setNotification({ type: "success", message: hasGroupApprovers ? "Group expense submitted for approval." : "Group expense saved." });
-            setValues({ memberId: state.members[0]?.id ?? "", amount: "", transactionDate: toIsoDateValue(), transactionType: "Savings Collection" });
+            setValues({ memberId: activeTransactionMembers[0]?.id ?? "", amount: "", transactionDate: toIsoDateValue(), transactionType: "Savings Collection" });
             setExpenseLines([{ category: "Accessories", amount: "", remarks: "" }]);
             setEditableAllocation(null);
             setAllocationEditing(false);
@@ -5487,7 +5733,7 @@ function Transactions({ state, setState, actor, setSelectedGroupId, setConfirmDi
       });
 
           setNotification({ type: 'success', message: hasGroupApprovers ? 'Transaction submitted for approval.' : `Completed ${currency.format(result.data.amount)} for ${member.fullName}.` });
-          setValues({ memberId: state.members[0]?.id ?? "", amount: "", transactionDate: toIsoDateValue(), transactionType: "Savings Collection" });
+          setValues({ memberId: activeTransactionMembers[0]?.id ?? "", amount: "", transactionDate: toIsoDateValue(), transactionType: "Savings Collection" });
           setEditableAllocation(null);
           setAllocationEditing(false);
           setAllocationErrors({});
@@ -5525,7 +5771,7 @@ function Transactions({ state, setState, actor, setSelectedGroupId, setConfirmDi
           onChange={(value) => setValues({ ...values, memberId: value })}
           options={[
             { label: "Group Expense", value: GROUP_EXPENSE_MEMBER_ID },
-            ...state.members.map((item) => ({ label: item.fullName, value: item.id }))
+            ...activeTransactionMembers.map((item) => ({ label: item.fullName, value: item.id }))
           ]}
           error={errors.memberId}
           required
@@ -5824,6 +6070,7 @@ function Adjustments({ state, setState, actor, setConfirmDialog, setNotification
     const nextErrors = {};
     if (!selectedTransaction) nextErrors.transactionId = "Select an original transaction.";
     if (selectedBlockReason) nextErrors.transactionId = selectedBlockReason;
+    if (selectedMember && !isMemberActive(selectedMember)) nextErrors.transactionId = "Inactive members cannot have new adjustment transactions.";
     if (!Number.isFinite(correctAmount)) nextErrors.correctAmount = "Enter a valid corrected amount.";
     if (correctAmount < 0) nextErrors.correctAmount = "Correct amount cannot be negative.";
     if (adjustmentAmount === 0) nextErrors.correctAmount = "Correct amount is same as original.";
@@ -6020,6 +6267,7 @@ function Reversals({ state, setState, actor, setConfirmDialog, setNotification }
     const nextErrors = {};
     if (!selectedTransaction) nextErrors.transactionId = "Select the wrong transaction.";
     if (selectedBlockReason) nextErrors.transactionId = selectedBlockReason;
+    if (selectedMember && !isMemberActive(selectedMember)) nextErrors.transactionId = "Inactive members cannot have new reversal transactions.";
     if (!values.reason.trim()) nextErrors.reason = "Add a reason for audit history.";
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
@@ -6145,8 +6393,9 @@ function Reversals({ state, setState, actor, setConfirmDialog, setNotification }
 }
 
 function Waivers({ state, setState, actor, setConfirmDialog, setNotification }) {
+  const activeWaiverMembers = activeMembersForTransactions(state.members || []);
   const [values, setValues] = useState({
-    memberId: state.members[0]?.id ?? "",
+    memberId: activeWaiverMembers[0]?.id ?? "",
     waiverType: "interest",
     amount: "",
     waiverDate: toIsoDateValue(),
@@ -6154,12 +6403,21 @@ function Waivers({ state, setState, actor, setConfirmDialog, setNotification }) 
   });
   const [errors, setErrors] = useState({});
   const selectedMember = state.members.find((member) => String(member.id) === String(values.memberId));
+  useEffect(() => {
+    if (!selectedMember || !isMemberActive(selectedMember)) {
+      setValues((current) => ({ ...current, memberId: activeWaiverMembers[0]?.id ?? "" }));
+    }
+  }, [selectedMember?.id, selectedMember?.status, selectedMember?.inactiveDate, activeWaiverMembers.length]);
   const dueDate = getLoanDueDate(state.groups?.[0]);
   const interestDue = selectedMember
     ? calculateMemberLoanInterestDue(selectedMember, state, dueDate)
       + Number(selectedMember.interestOutstanding || 0)
     : 0;
-  const penaltyDue = selectedMember ? Number(selectedMember.penaltyOutstanding || 0) : 0;
+  const penaltyDue = selectedMember
+    ? calculatePendingDues(state, actor, false)
+        .filter((row) => String(row.memberId) === String(selectedMember.id))
+        .reduce((sum, row) => sum + Number(row.penaltyDue || 0), 0)
+    : 0;
   const maxWaiver = values.waiverType === "interest" ? interestDue : penaltyDue;
   const waiverRows = (state.transactions || []).filter((item) => item.transactionType === "Waiver");
 
@@ -6168,6 +6426,7 @@ function Waivers({ state, setState, actor, setConfirmDialog, setNotification }) 
     const amount = Number(values.amount || 0);
     const nextErrors = {};
     if (!selectedMember) nextErrors.memberId = "Select a member.";
+    if (selectedMember && !isMemberActive(selectedMember)) nextErrors.memberId = "Inactive members cannot receive waiver transactions.";
     if (!amount || amount <= 0) nextErrors.amount = "Enter waiver amount.";
     if (amount > maxWaiver) nextErrors.amount = `Maximum ${values.waiverType} waiver is ${currency.format(maxWaiver)}.`;
     if (!values.reason.trim()) nextErrors.reason = "Add reason for waiver.";
@@ -6227,7 +6486,7 @@ function Waivers({ state, setState, actor, setConfirmDialog, setNotification }) 
             newValue: created
           }));
           setNotification({ type: "success", message: hasGroupApprovers ? "Waiver submitted for approval." : "Waiver completed." });
-          setValues({ memberId: state.members[0]?.id ?? "", waiverType: "interest", amount: "", waiverDate: toIsoDateValue(), reason: "" });
+          setValues({ memberId: activeWaiverMembers[0]?.id ?? "", waiverType: "interest", amount: "", waiverDate: toIsoDateValue(), reason: "" });
         } catch (error) {
           setNotification({ type: "error", message: `Unable to create waiver: ${error.message}`, details: serializeError(error) });
         }
@@ -6244,7 +6503,7 @@ function Waivers({ state, setState, actor, setConfirmDialog, setNotification }) 
             label="Member"
             value={values.memberId}
             onChange={(memberId) => setValues({ ...values, memberId })}
-            options={state.members.map((member) => ({ label: member.fullName, value: member.id }))}
+            options={activeWaiverMembers.map((member) => ({ label: member.fullName, value: member.id }))}
             error={errors.memberId}
           />
           <SelectField
@@ -6501,6 +6760,7 @@ function buildFinanceAgentContext(state, actor) {
       periodName: row.periodName,
       dueDate: row.dueDate,
       savingDue: row.savingDue,
+      principalDue: row.principalDue,
       outstandingPrincipal: row.outstandingPrincipal,
       interestDue: row.interestDue,
       penaltyDue: row.penaltyDue,
@@ -6765,7 +7025,7 @@ function PendingDues({ state, setState, actor, setNotification }) {
       const total = rows.reduce((sum, row) => sum + row.totalDue, 0);
       const latestDue = rows.map((row) => row.dueDate).sort()[0];
       const body = rows.map((row) =>
-        `${row.periodName}: Saving ${currency.format(row.savingDue)}, outstanding principal ${currency.format(row.outstandingPrincipal)}, interest ${currency.format(row.interestDue)}, penalty ${currency.format(row.penaltyDue)}, total ${currency.format(row.totalDue)}, due ${new Date(row.dueDate).toLocaleDateString("en-IN")}`
+        `${row.periodName}: Saving ${currency.format(row.savingDue)}, principal due ${currency.format(row.principalDue ?? row.outstandingPrincipal)}, interest ${currency.format(row.interestDue)}, penalty ${currency.format(row.penaltyDue)}, total ${currency.format(row.totalDue)}, due ${new Date(row.dueDate).toLocaleDateString("en-IN")}`
       ).join(" | ");
       return {
         id: makeId("ntf"),
@@ -6792,13 +7052,13 @@ function PendingDues({ state, setState, actor, setNotification }) {
       action={!memberOnly ? <button type="button" className="secondary-button" onClick={notifyMembers}>Notify members</button> : null}
     >
       <Table
-        headers={["Month", "Member", "Due date", "Saving", "Outstanding principal", "Interest", "Penalty", "Total to pay", ...(!memberOnly ? ["Action"] : [])]}
+        headers={["Month", "Member", "Due date", "Saving", "Principal due", "Interest", "Penalty", "Total to pay", ...(!memberOnly ? ["Action"] : [])]}
         rows={dueRows.map((row) => [
           row.periodName,
           row.memberName,
           new Date(row.dueDate).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" }),
           currency.format(row.savingDue),
-          currency.format(row.outstandingPrincipal),
+          currency.format(row.principalDue ?? row.outstandingPrincipal),
           currency.format(row.interestDue),
           currency.format(row.penaltyDue),
           currency.format(row.totalDue),
@@ -6817,8 +7077,11 @@ function PendingDues({ state, setState, actor, setNotification }) {
 function Withdrawals({ state, setState, actor, setConfirmDialog, setNotification }) {
   const requesterMember = getCurrentMember(state, actor);
   const memberOnlyRequest = !isGroupAdminActor(state, actor);
+  const activeWithdrawalMembers = memberOnlyRequest && requesterMember
+    ? (isMemberActive(requesterMember) ? [requesterMember] : [])
+    : activeMembersForTransactions(state.members || []);
   const [values, setValues] = useState({
-    memberId: memberOnlyRequest ? requesterMember?.id ?? "" : state.members[0]?.id ?? "",
+    memberId: memberOnlyRequest ? requesterMember?.id ?? "" : activeWithdrawalMembers[0]?.id ?? "",
     amount: "",
     requestDate: toIsoDateValue(),
     reason: ""
@@ -6839,6 +7102,9 @@ function Withdrawals({ state, setState, actor, setConfirmDialog, setNotification
     if (memberOnlyRequest && requesterMember?.id && String(values.memberId) !== String(requesterMember.id)) {
       setValues((current) => ({ ...current, memberId: requesterMember.id }));
     }
+    if (!memberOnlyRequest && (!selectedMember || !isMemberActive(selectedMember))) {
+      setValues((current) => ({ ...current, memberId: activeLoanMembers[0]?.id ?? "" }));
+    }
   }, [memberOnlyRequest, requesterMember?.id, values.memberId]);
 
   function submit(event) {
@@ -6846,6 +7112,7 @@ function Withdrawals({ state, setState, actor, setConfirmDialog, setNotification
     const amount = Number(values.amount || 0);
     const nextErrors = {};
     if (!selectedMember) nextErrors.memberId = "Select a member.";
+    if (selectedMember && !isMemberActive(selectedMember)) nextErrors.memberId = "Inactive members cannot request withdrawals.";
     if (!amount || amount <= 0) nextErrors.amount = "Enter withdrawal amount.";
     if (amount > availableShare) nextErrors.amount = `Maximum available share is ${currency.format(availableShare)} after loan, interest and penalty.`;
     if (amount > remainingAccountBalance) nextErrors.amount = `Maximum available account balance is ${currency.format(remainingAccountBalance)}.`;
@@ -6915,7 +7182,7 @@ function Withdrawals({ state, setState, actor, setConfirmDialog, setNotification
             newValue: createdRequest
           }));
           setNotification({ type: "success", message: hasGroupApprovers ? "Withdrawal request submitted for approval." : "Withdrawal request completed." });
-          setValues({ memberId: memberOnlyRequest ? requesterMember?.id ?? "" : state.members[0]?.id ?? "", amount: "", requestDate: toIsoDateValue(), reason: "" });
+          setValues({ memberId: memberOnlyRequest ? requesterMember?.id ?? "" : activeWithdrawalMembers[0]?.id ?? "", amount: "", requestDate: toIsoDateValue(), reason: "" });
         } catch (error) {
           setNotification({ type: "error", message: `Unable to submit withdrawal request: ${error.message}`, details: serializeError(error) });
         }
@@ -6930,7 +7197,7 @@ function Withdrawals({ state, setState, actor, setConfirmDialog, setNotification
         {memberOnlyRequest ? (
           <Field label="Member" value={selectedMember?.fullName ?? actor?.name ?? ""} onChange={() => {}} />
         ) : (
-          <SelectField label="Member" required value={values.memberId} onChange={(memberId) => setValues({ ...values, memberId })} options={state.members.map((member) => ({ label: member.fullName, value: member.id }))} error={errors.memberId} />
+          <SelectField label="Member" required value={values.memberId} onChange={(memberId) => setValues({ ...values, memberId })} options={activeWithdrawalMembers.map((member) => ({ label: member.fullName, value: member.id }))} error={errors.memberId} />
         )}
         <Field label="Withdrawal amount" required type="number" value={values.amount} onChange={(amount) => setValues({ ...values, amount })} error={errors.amount} />
         <Field label="Request date" required type="date" value={values.requestDate} onChange={(requestDate) => setValues({ ...values, requestDate })} error={errors.requestDate} />
@@ -6955,15 +7222,18 @@ function Withdrawals({ state, setState, actor, setConfirmDialog, setNotification
 function Loans({ state, setState, actor, setConfirmDialog, setNotification }) {
   const requesterMember = getCurrentMember(state, actor);
   const memberOnlyRequest = !isGroupAdminActor(state, actor);
+  const activeLoanMembers = memberOnlyRequest && requesterMember
+    ? (isMemberActive(requesterMember) ? [requesterMember] : [])
+    : activeMembersForTransactions(state.members || []);
   const [values, setValues] = useState({
-    memberId: memberOnlyRequest ? requesterMember?.id ?? "" : state.members[0]?.id ?? "",
+    memberId: memberOnlyRequest ? requesterMember?.id ?? "" : activeLoanMembers[0]?.id ?? "",
     amount: "",
     reason: "",
     startDate: toIsoDateValue()
   });
   const [errors, setErrors] = useState({});
   const selectedMember = memberOnlyRequest ? requesterMember : state.members.find((member) => String(member.id) === String(values.memberId));
-  const visibleLoanMembers = memberOnlyRequest && requesterMember ? [requesterMember] : state.members;
+  const visibleLoanMembers = activeLoanMembers;
   const visibleLoans = (memberOnlyRequest
     ? state.loans.filter((loanItem) => loanBelongsToMember(loanItem, requesterMember))
     : state.loans)
@@ -6972,6 +7242,9 @@ function Loans({ state, setState, actor, setConfirmDialog, setNotification }) {
   useEffect(() => {
     if (memberOnlyRequest && requesterMember?.id && String(values.memberId) !== String(requesterMember.id)) {
       setValues((current) => ({ ...current, memberId: requesterMember.id }));
+    }
+    if (!memberOnlyRequest && (!selectedMember || !isMemberActive(selectedMember))) {
+      setValues((current) => ({ ...current, memberId: activeWithdrawalMembers[0]?.id ?? "" }));
     }
   }, [memberOnlyRequest, requesterMember?.id, values.memberId]);
 
@@ -6991,6 +7264,12 @@ function Loans({ state, setState, actor, setConfirmDialog, setNotification }) {
     const result = validate(loanSchema, { ...values, rate: effectiveRate, durationMonths: effectiveDuration });
     if (!selectedMember) {
       setErrors((current) => ({ ...current, memberId: "Create or select a member first." }));
+      return;
+    }
+    if (!isMemberActive(selectedMember)) {
+      setErrors((current) => ({ ...current, memberId: "Inactive members cannot request or receive loans." }));
+      setNotification({ type: "error", message: "Inactive members cannot request or receive loans." });
+      setTimeout(() => setNotification(null), 4000);
       return;
     }
 
@@ -7143,23 +7422,27 @@ function Loans({ state, setState, actor, setConfirmDialog, setNotification }) {
 }
 
 function Approvals({ state, setState, actor, setConfirmDialog, setNotification }) {
-  const actorMemberIds = new Set((state.members || [])
-    .filter((member) =>
-      String(member.id) === String(actor?.memberId)
-      || (member.email && actor?.email && member.email.toLowerCase() === actor.email.toLowerCase())
-      || (member.username && actor?.username && member.username.toLowerCase() === actor.username.toLowerCase())
-    )
-    .map((member) => String(member.id)));
+  const adminLikeApproverView = actor?.role === roles.PRODUCT_OWNER || isGroupAdminActor(state, actor);
+  const actorMembers = (state.members || []).filter((member) =>
+    String(member.id) === String(actor?.memberId)
+    || (member.email && actor?.email && normalizeLookup(member.email) === normalizeLookup(actor.email))
+    || (member.username && actor?.username && normalizeLookup(member.username) === normalizeLookup(actor.username))
+    || (member.fullName && actor?.name && normalizeLookup(member.fullName) === normalizeLookup(actor.name))
+  );
   const visibleApprovals = (state.approvals || []).filter((approval) =>
-    actor?.role === roles.PRODUCT_OWNER
-    || actorMemberIds.has(String(approval.approverId))
-    || (approval.approverName && approval.approverName === actor?.name)
+    adminLikeApproverView
+    || (approval.status === "Pending" && isApprovalAssignedToActor(approval, actor, actorMembers))
   );
 
   async function applyDecision(id, status) {
     const targetBeforeDecision = (state.approvals || []).find((approval) => String(approval.id) === String(id));
     const approvalsAfterDecision = (state.approvals || []).map((approval) =>
-      String(approval.id) === String(id) ? { ...approval, status } : approval
+      targetBeforeDecision?.batchId
+        && targetBeforeDecision.batchId === approval.batchId
+        && (status === "Rejected" || status === "Returned")
+        && approval.status === "Pending"
+        ? { ...approval, status }
+        : String(approval.id) === String(id) ? { ...approval, status } : approval
     );
     const setupChangeBeforeDecision = targetBeforeDecision?.batchId
       ? (state.pendingSetupChanges || []).find((change) =>
@@ -7203,9 +7486,50 @@ function Approvals({ state, setState, actor, setConfirmDialog, setNotification }
         return;
       }
     }
+    const memberAdditionBatch = targetBeforeDecision?.batchId
+      ? approvalsAfterDecision.filter((approval) => approval.batchId === targetBeforeDecision.batchId)
+      : [];
+    const memberAdditionApproved = targetBeforeDecision?.referenceType === "member_addition"
+      && status === "Approved"
+      && memberAdditionBatch.length > 0
+      && memberAdditionBatch.every((approval) => approval.status === "Approved");
+    if (memberAdditionApproved) {
+      const groupId = targetBeforeDecision.groupId ?? state.groups?.[0]?.id;
+      const activePlan = getGroupPlan(state, groupId);
+      const activeMemberCount = activeMembersForTransactions(state.members || [])
+        .filter((member) => String(member.id) !== String(targetBeforeDecision.referenceId))
+        .length;
+      if (Number.isFinite(activePlan.maxMembers) && activeMemberCount >= activePlan.maxMembers) {
+        setNotification({
+          type: "error",
+          message: `Cannot approve member addition. The current plan allows ${activePlan.maxMembers} active members only.`
+        });
+        return;
+      }
+    }
+    if (targetBeforeDecision?.referenceType === "member_addition" && repository.isConfigured()) {
+      try {
+        if (memberAdditionApproved) {
+          await repository.updateMember(targetBeforeDecision.referenceId, { active: true });
+        }
+        if (status === "Rejected" || status === "Returned") {
+          await repository.updateMember(targetBeforeDecision.referenceId, { active: false });
+        }
+      } catch (error) {
+        setNotification({ type: "error", message: `Approval saved, but member status update failed: ${error.message}`, details: serializeError(error) });
+        return;
+      }
+    }
     setState((current) => {
       const target = current.approvals.find((approval) => String(approval.id) === String(id));
-      const approvals = current.approvals.map((approval) => String(approval.id) === String(id) ? { ...approval, status } : approval);
+      const approvals = current.approvals.map((approval) =>
+        target?.batchId
+          && target.batchId === approval.batchId
+          && (status === "Rejected" || status === "Returned")
+          && approval.status === "Pending"
+          ? { ...approval, status }
+          : String(approval.id) === String(id) ? { ...approval, status } : approval
+      );
       let nextState = { ...current, approvals };
       const pendingSetupChange = target?.batchId
         ? (nextState.pendingSetupChanges || []).find((change) => change.batchId === target.batchId && change.status === "Pending")
@@ -7259,6 +7583,20 @@ function Approvals({ state, setState, actor, setConfirmDialog, setNotification }
                 : opening
             )
           };
+        }
+        if (target.referenceType === "member_addition") {
+          nextState = addGroupNotification({
+            ...nextState,
+            members: (nextState.members || []).map((member) =>
+              String(member.id) === String(target.referenceId)
+                ? { ...member, status: "Inactive", approvalStatus: status }
+                : member
+            )
+          }, {
+            title: `Member addition ${status.toLowerCase()}`,
+            body: `${target.action} for member was ${status.toLowerCase()}.`,
+            type: "warning"
+          });
         }
           if (target.referenceType === "expense") {
             nextState = {
@@ -7362,6 +7700,20 @@ function Approvals({ state, setState, actor, setConfirmDialog, setNotification }
               )
             };
           }
+          if (target.referenceType === "member_addition") {
+            nextState = addGroupNotification({
+              ...nextState,
+              members: (nextState.members || []).map((member) =>
+                String(member.id) === String(target.referenceId)
+                  ? { ...member, status: "Active", approvalStatus: "Completed" }
+                  : member
+              )
+            }, {
+              title: "Member addition approved",
+              body: "Member is now active in the group.",
+              type: "success"
+            });
+          }
           if ((target.referenceType === "group_setup" || target.referenceType === "member_setup") && pendingSetupChange) {
             nextState = addGroupNotification(applySetupChangeToState(nextState, pendingSetupChange, setupUpdatedRecord), {
               title: `${getSetupChangeTypeLabel(pendingSetupChange.setupType)} changed`,
@@ -7390,6 +7742,10 @@ function Approvals({ state, setState, actor, setConfirmDialog, setNotification }
   function decide(id, status) {
     const approval = state.approvals.find((item) => item.id === id);
     if (!approval || approval.status !== "Pending") return;
+    if (!adminLikeApproverView && !isApprovalAssignedToActor(approval, actor, actorMembers)) {
+      setNotification({ type: "error", message: "This approval is pending with another approver." });
+      return;
+    }
     setConfirmDialog({
       title: `${status} approval`,
       message: `Confirm ${status.toLowerCase()} for ${approval.action}? This action cannot be changed from this screen.`,
@@ -7404,42 +7760,48 @@ function Approvals({ state, setState, actor, setConfirmDialog, setNotification }
   return (
     <Page title="Approvals" subtitle="Two-level workflow for sensitive financial actions" action={null}>
       <div className="approval-list">
-        {visibleApprovals.map((approval) => (
-          <article className="entity-card compact-card" key={approval.id}>
-            <span className="pill">{approval.status}</span>
-            <h3>{approval.action}</h3>
-            <p>{approval.requester} / Pending with {approval.approverName ?? approval.level} / {approval.amount ? currency.format(approval.amount) : "No amount"}</p>
-            {approval.details && <p className="section-note">{approval.details}</p>}
-            <div className="button-row">
-              <button type="button" disabled={approval.status !== "Pending"} onClick={() => decide(approval.id, "Approved")}>Approve</button>
-              <button type="button" disabled={approval.status !== "Pending"} onClick={() => decide(approval.id, "Rejected")}>Reject</button>
-              <button type="button" disabled={approval.status !== "Pending"} onClick={() => decide(approval.id, "Returned")}>Return</button>
-            </div>
-          </article>
-        ))}
+        {visibleApprovals.map((approval) => {
+          const batch = approvalBatchFor(approval, state.approvals);
+          const pendingBatch = batch.filter((item) => item.status === "Pending");
+          const pendingWith = formatPendingApproverNames(pendingBatch);
+          const allApproved = batch.length > 0 && batch.every((item) => item.status === "Approved");
+          const assignedToActor = isApprovalAssignedToActor(approval, actor, actorMembers);
+          const canDecide = approval.status === "Pending" && (adminLikeApproverView || assignedToActor);
+          return (
+            <article className="entity-card compact-card" key={approval.id}>
+              <span className="pill">{allApproved ? "Completed" : approval.status}</span>
+              <h3>{approval.action}</h3>
+              <p>{approval.requester} / Pending with {pendingWith} / {approval.amount ? currency.format(approval.amount) : "No amount"}</p>
+              {approval.status === "Approved" && !allApproved && <p className="section-note">This approver has approved. Waiting for: {pendingWith}</p>}
+              {approval.details && <p className="section-note">{approval.details}</p>}
+              <div className="button-row">
+                <button type="button" disabled={!canDecide} onClick={() => decide(approval.id, "Approved")}>Approve</button>
+                <button type="button" disabled={!canDecide} onClick={() => decide(approval.id, "Rejected")}>Reject</button>
+                <button type="button" disabled={!canDecide} onClick={() => decide(approval.id, "Returned")}>Return</button>
+              </div>
+            </article>
+          );
+        })}
         {visibleApprovals.length === 0 && <p className="section-note">No approvals assigned to your login.</p>}
       </div>
     </Page>
   );
 }
 
-function Reports({ state, actor }) {
+function Reports({ state, actor, setNotification }) {
   const todayIso = toIsoDateValue();
   const monthStartIso = `${todayIso.slice(0, 8)}01`;
   const [draftStartDate, setDraftStartDate] = useState(monthStartIso);
   const [draftEndDate, setDraftEndDate] = useState(todayIso);
   const [reportRange, setReportRange] = useState({ startDate: monthStartIso, endDate: todayIso });
   const snapshotState = getStateTillDate(state, reportRange.endDate);
-  const snapshotPeriod = {
-    name: `${reportRange.startDate} to ${reportRange.endDate}`,
-    startDate: "1900-01-01",
-    endDate: reportRange.endDate
-  };
-  const groupSummary = calculateGroupFinanceSummary(snapshotState, snapshotPeriod);
   const rangeTransactions = getCompletedTransactions(snapshotState.transactions || [])
     .filter((transaction) => isIsoDateInRange(transaction.transactionDate, reportRange.startDate, reportRange.endDate));
   const rangeExpenses = getCompletedTransactions(snapshotState.expenses || [])
     .filter((expense) => isIsoDateInRange(expense.transactionDate || expense.expenseDate || expense.createdAt, reportRange.startDate, reportRange.endDate));
+  const rangeLoans = (snapshotState.loans || []).filter((loan) =>
+    isIsoDateInRange(loan.startDate || loan.distributionDate || loan.requestDate || loan.createdAt, reportRange.startDate, reportRange.endDate)
+  );
   const groupCollectedInRange = rangeTransactions.reduce((sum, transaction) => {
     if (transaction.transactionType === "Withdrawal") {
       return sum - Math.abs(Number(transaction.amount || transaction.allocation?.savings || 0));
@@ -7462,10 +7824,18 @@ function Reports({ state, actor }) {
   const groupWithdrawnInRange = rangeTransactions
     .filter((transaction) => transaction.transactionType === "Withdrawal")
     .reduce((sum, transaction) => sum + Math.abs(Number(transaction.amount || transaction.allocation?.savings || 0)), 0);
+  const groupSavingsInRange = rangeTransactions.reduce((sum, transaction) => {
+    if (transaction.transactionType === "Group Expense Share") return sum;
+    return sum + Number(transaction.allocation?.savings || 0) + Number(transaction.allocation?.excess || 0);
+  }, 0);
+  const groupPrincipalRepaidInRange = rangeTransactions.reduce((sum, transaction) => sum + Number(transaction.allocation?.principal || 0), 0);
+  const groupLoanDisbursedInRange = rangeLoans.reduce((sum, loan) => sum + Number(loan.amount || 0), 0);
+  const groupLoanBalanceInRange = Math.max(0, groupLoanDisbursedInRange - groupPrincipalRepaidInRange);
+  const groupRemainingInRange = groupSavingsInRange + groupPrincipalRepaidInRange + groupGainInRange - groupExpensesInRange - groupWithdrawnInRange - groupLoanBalanceInRange;
   const memberSummaries = (snapshotState.members || []).map((member) => {
-    const summary = calculateMemberFinanceSummary(member, snapshotState, snapshotPeriod, actor);
     const memberTransactions = rangeTransactions
       .filter((transaction) => String(transaction.memberId) === String(member.id));
+    const memberLoansInRange = rangeLoans.filter((loan) => loanBelongsToMember(loan, member));
     const collectedInRange = memberTransactions.reduce((sum, transaction) => {
       if (transaction.transactionType === "Withdrawal") {
         return sum - Math.abs(Number(transaction.amount || transaction.allocation?.savings || 0));
@@ -7490,25 +7860,34 @@ function Reports({ state, actor }) {
     const withdrawnInRange = memberTransactions
       .filter((transaction) => transaction.transactionType === "Withdrawal")
       .reduce((sum, transaction) => sum + Math.abs(Number(transaction.amount || transaction.allocation?.savings || 0)), 0);
-    const activeLoans = summary.memberActiveLoans || [];
-    const principalOutstanding = activeLoans.reduce((sum, loan) => sum + calculateDerivedLoanPrincipalOutstanding(loan, snapshotState), 0);
-    const interestDue = activeLoans.reduce((sum, loan) => sum + Number(loan.interestOutstanding || 0), 0);
-    const penaltyDue = activeLoans.reduce((sum, loan) => sum + Number(loan.penaltyOutstanding || 0), 0);
+    const savingsInRange = memberTransactions.reduce((sum, transaction) => {
+      if (transaction.transactionType === "Group Expense Share") return sum;
+      return sum + Number(transaction.allocation?.savings || 0) + Number(transaction.allocation?.excess || 0);
+    }, 0);
+    const principalRepaidInRange = memberTransactions.reduce((sum, transaction) => sum + Number(transaction.allocation?.principal || 0), 0);
+    const loanDisbursedInRange = memberLoansInRange.reduce((sum, loan) => sum + Number(loan.amount || 0), 0);
+    const principalOutstanding = Math.max(0, loanDisbursedInRange - principalRepaidInRange);
+    const interestDue = memberLoansInRange.reduce((sum, loan) => sum + Number(loan.interestOutstanding || 0), 0);
+    const penaltyDue = memberLoansInRange.reduce((sum, loan) => sum + Number(loan.penaltyOutstanding || 0), 0);
+    const shareAmountInRange = savingsInRange + gainInRange - expenseInRange - withdrawnInRange;
+    const hasRangeActivity = memberTransactions.length > 0 || memberLoansInRange.length > 0;
 
     return {
       member,
-      summary,
       collectedInRange,
+      savingsInRange,
       gainInRange,
       expenseInRange,
+      shareAmountInRange,
       withdrawnInRange,
-      activeLoanCount: activeLoans.length,
+      activeLoanCount: memberLoansInRange.length,
       principalOutstanding,
       interestDue,
-      penaltyDue
+      penaltyDue,
+      hasRangeActivity
     };
-  });
-  const groupShareAmount = memberSummaries.reduce((sum, row) => sum + Number(row.summary.shareAmount || 0), 0);
+  }).filter((row) => row.hasRangeActivity);
+  const groupShareAmount = memberSummaries.reduce((sum, row) => sum + Number(row.shareAmountInRange || 0), 0);
   const groupInterestDue = memberSummaries.reduce((sum, row) => sum + Number(row.interestDue || 0), 0);
   const groupPenaltyDue = memberSummaries.reduce((sum, row) => sum + Number(row.penaltyDue || 0), 0);
   const memberRows = memberSummaries.map((row) => [
@@ -7516,17 +7895,60 @@ function Reports({ state, actor }) {
     row.member.username || "-",
     row.member.status || "-",
     currency.format(row.collectedInRange),
-    currency.format(row.summary.savings),
+    currency.format(row.savingsInRange),
     currency.format(row.gainInRange),
     currency.format(row.expenseInRange),
-    currency.format(row.summary.shareAmount),
+    currency.format(row.shareAmountInRange),
     row.activeLoanCount,
     currency.format(row.principalOutstanding),
     currency.format(row.interestDue),
     currency.format(row.penaltyDue),
-    currency.format(row.summary.outstanding),
+    currency.format(row.principalOutstanding + row.interestDue + row.penaltyDue),
     currency.format(row.withdrawnInRange)
   ]);
+  const groupHeaders = ["Group", "Members with activity", "Collected in range", "Savings in range", "Income/Gain in range", "Expenses in range", "Remaining in range", "Loans disbursed in range", "Principal outstanding in range", "Interest due in range", "Penalty due in range", "Total share in range", "Withdrawn in range"];
+  const groupRows = [[
+    snapshotState.groups?.[0]?.name || "Group",
+    memberSummaries.length,
+    currency.format(groupCollectedInRange),
+    currency.format(groupSavingsInRange),
+    currency.format(groupGainInRange),
+    currency.format(groupExpensesInRange),
+    currency.format(groupRemainingInRange),
+    rangeLoans.length,
+    currency.format(groupLoanBalanceInRange),
+    currency.format(groupInterestDue),
+    currency.format(groupPenaltyDue),
+    currency.format(groupShareAmount),
+    currency.format(groupWithdrawnInRange)
+  ]];
+  const memberHeaders = ["Member", "Username", "Status", "Collected in range", "Savings in range", "Income/Gain in range", "Expense in range", "Share amount in range", "Loans in range", "Principal outstanding in range", "Interest due in range", "Penalty due in range", "Total loan balance in range", "Withdrawn in range"];
+  const reportText = formatReportTablesText({
+    title: `Bachat Gat report ${reportRange.startDate} to ${reportRange.endDate}`,
+    sections: [
+      { title: "Group summary", headers: groupHeaders, rows: groupRows },
+      { title: "Member summary", headers: memberHeaders, rows: memberRows }
+    ]
+  });
+
+  async function copyReportText() {
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: "Bachat Gat Report", text: reportText });
+        setNotification?.({ type: "success", message: "Report shared." });
+        return;
+      }
+      await navigator.clipboard.writeText(reportText);
+      setNotification?.({ type: "success", message: "Report copied. You can paste it in WhatsApp or any other app." });
+    } catch (error) {
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(reportText);
+        setNotification?.({ type: "success", message: "Report copied. You can paste it in WhatsApp or any other app." });
+        return;
+      }
+      setNotification?.({ type: "error", message: `Unable to share report: ${error.message}`, details: serializeError(error) });
+    }
+  }
 
   return (
     <Page title="Reports & Audit" subtitle="Group and member financial summary for selected dates" action={null}>
@@ -7547,31 +7969,20 @@ function Reports({ state, actor }) {
           <Field label="End date" type="date" value={draftEndDate} onChange={setDraftEndDate} />
           <button className="primary-button" type="submit">Generate report</button>
         </form>
-        <p className="section-note">Showing generated values from {reportRange.startDate} to {reportRange.endDate}. Balance columns are shown as of the end date.</p>
+        <p className="section-note">Showing only values available from {reportRange.startDate} to {reportRange.endDate}.</p>
       </Section>
       <Section title="Group summary">
+        <div className="button-row" style={{ marginBottom: 14 }}>
+          <button type="button" className="secondary-button" onClick={copyReportText}>Copy / Share report</button>
+        </div>
         <Table
-          headers={["Group", "Members", "Collected in range", "Savings as of end date", "Income/Gain in range", "Expenses in range", "Remaining balance as of end date", "Active loans", "Principal outstanding", "Interest due", "Penalty due", "Total share amount", "Withdrawn in range"]}
-          rows={[[
-            snapshotState.groups?.[0]?.name || "Group",
-            snapshotState.members?.length || 0,
-            currency.format(groupCollectedInRange),
-            currency.format(groupSummary.totalSavings),
-            currency.format(groupGainInRange),
-            currency.format(groupExpensesInRange),
-            currency.format(groupSummary.remainingBalance),
-            groupSummary.activeLoans.length,
-            currency.format(groupSummary.totalActiveLoan),
-            currency.format(groupInterestDue),
-            currency.format(groupPenaltyDue),
-            currency.format(groupShareAmount),
-            currency.format(groupSummary.totalWithdrawn)
-          ]]}
+          headers={groupHeaders}
+          rows={groupRows}
         />
       </Section>
       <Section title="Member summary">
         <Table
-          headers={["Member", "Username", "Status", "Collected in range", "Savings as of end date", "Income/Gain in range", "Expense in range", "Share amount as of end date", "Active loans", "Principal outstanding", "Interest due", "Penalty due", "Total loan balance", "Withdrawn in range"]}
+          headers={memberHeaders}
           rows={memberRows}
         />
       </Section>
@@ -7583,6 +7994,23 @@ function isIsoDateInRange(dateValue, startDate, endDate) {
   if (!dateValue) return false;
   const value = String(dateValue).slice(0, 10);
   return value >= startDate && value <= endDate;
+}
+
+function formatReportTablesText({ title, sections }) {
+  const formatRow = (headers, row) => headers
+    .map((header, index) => `  - ${header}: ${row[index] ?? "-"}`)
+    .join("\n");
+  const formatSection = (section) => {
+    if (!section.rows.length) return `${section.title}\n  No records found.`;
+    const rows = section.rows.map((row, index) => {
+      const memberTitle = row[0] ? `${index + 1}. ${row[0]}` : `${index + 1}. Record`;
+      return section.rows.length === 1
+        ? formatRow(section.headers, row)
+        : `${memberTitle}\n${formatRow(section.headers.slice(1), row.slice(1))}`;
+    });
+    return `${section.title}\n${rows.join("\n\n")}`;
+  };
+  return [title, ...sections.map(formatSection)].join("\n\n");
 }
 
 function getStateTillDate(state, tillDate) {
@@ -7770,12 +8198,15 @@ function SettingsPage({ state, setState, actor, setConfirmDialog, setNotificatio
 }
 
 function NotificationList({ notifications }) {
+  if (!notifications?.length) {
+    return <p className="section-note">No notifications yet.</p>;
+  }
   return (
     <div className="notification-list">
       {notifications.map((notification) => (
         <div className={`notification ${notification.type}`} key={notification.id}>
-          <strong>{notification.title}</strong>
-          <span>{notification.body}</span>
+          <strong>{notification.title || notification.message || "Notification"}</strong>
+          <span>{notification.body || notification.details || ""}</span>
         </div>
       ))}
     </div>
@@ -7863,7 +8294,7 @@ function FormCard({ title, onSubmit, children, hideSubmit }) {
 function Field({ label, value, onChange, type = "text", error, required = false, disabled = false }) {
   return (
     <label className="field">
-      <span>{bilingual(label)}{required ? " *" : ""}</span>
+      <span>{bilingual(label)}{required ? " *" : " (Optional)"}</span>
       <input
         type={type}
         value={value ?? ""}
@@ -7881,7 +8312,7 @@ function Field({ label, value, onChange, type = "text", error, required = false,
 function SelectField({ label, value, onChange, options, error, required = false }) {
   return (
     <label className="field">
-      <span>{bilingual(label)}{required ? " *" : ""}</span>
+      <span>{bilingual(label)}{required ? " *" : " (Optional)"}</span>
       <select value={value} onChange={(event) => onChange(event.target.value)}>
         {options.map((option) => {
           const item = typeof option === "string" ? { label: option, value: option } : option;
