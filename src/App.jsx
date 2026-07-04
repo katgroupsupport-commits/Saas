@@ -2214,6 +2214,24 @@ function hasActiveAdminMember(members = [], adminNames = []) {
   return members.some((member) => isMemberActive(member) && isMemberNamedAdmin(member, adminNames));
 }
 
+function getGroupAdminMembers(state) {
+  const group = state.groups?.[0] ?? {};
+  const adminNames = [...(group.admins || [])].filter(Boolean);
+  return (state.members || []).filter((member) => isMemberActive(member) && isMemberNamedAdmin(member, adminNames));
+}
+
+function loanApprovalRequired(state, requester) {
+  const configuredApprovers = getConfiguredApprovalRecipients(state);
+  if (configuredApprovers.length > 0) return true;
+
+  const adminMembers = getGroupAdminMembers(state);
+  const requesterIsAdmin = isMemberNamedAdmin(requester, [...(state.groups?.[0]?.admins || [])].filter(Boolean));
+  if (requesterIsAdmin) {
+    return adminMembers.some((member) => String(member.id) !== String(requester?.id));
+  }
+  return adminMembers.length > 0;
+}
+
 function getApprovalRecipients(state) {
   const group = state.groups?.[0] ?? {};
   const names = new Set([...(group.admins || []), ...(group.approvers || [])].filter(Boolean));
@@ -7312,10 +7330,11 @@ function Loans({ state, setState, actor, setConfirmDialog, setNotification }) {
       onConfirm: async () => {
         setConfirmDialog(null);
         try {
-          const createdLoan = await repository.createLoan(localLoan, primaryGroupId, selectedMember.id, actor.id);
+          const approvalRequired = loanApprovalRequired(state, selectedMember);
+          const createdLoan = await repository.createLoan(localLoan, primaryGroupId, selectedMember.id, actor.id, approvalRequired);
           if (!createdLoan.memberName) createdLoan.memberName = selectedMember.fullName;
 
-          const approvalRecord = createApprovalRecords({
+          const approvalRecord = approvalRequired ? createApprovalRecords({
             state,
             action: "Loan request",
             requester: selectedMember.fullName,
@@ -7323,18 +7342,27 @@ function Loans({ state, setState, actor, setConfirmDialog, setNotification }) {
             referenceId: createdLoan.requestId ?? createdLoan.id,
             referenceType: "loan_request",
             details: `Rate: ${Number(createdLoan.rate || effectiveRate || 0)}% monthly / Reason: ${createdLoan.reason || "Not provided"} / Request date: ${createdLoan.startDate || values.startDate}`
-          });
-          const persistedApprovals = repository.isConfigured()
+          }) : [];
+          const persistedApprovals = approvalRequired && repository.isConfigured()
             ? await repository.createApprovalRequests({ groupId: primaryGroupId, approvals: approvalRecord })
             : approvalRecord;
 
           setState((current) => audit({
             state: {
               ...current,
-              loans: [createdLoan, ...current.loans],
+              loans: [{
+                ...createdLoan,
+                status: approvalRequired ? createdLoan.status : "Active",
+                approvalStatus: approvalRequired ? createdLoan.approvalStatus : "Completed",
+                loanStatus: approvalRequired ? createdLoan.loanStatus : "ACTIVE",
+                principalOutstanding: Number(createdLoan.amount || 0),
+                interestOutstanding: 0,
+                penaltyOutstanding: 0,
+                startDate: createdLoan.startDate || values.startDate
+              }, ...current.loans],
               approvals: [...persistedApprovals, ...current.approvals],
               notifications: [
-                { id: makeId("ntf"), groupId: state.groups[0]?.id, title: "Loan approval requested", body: `${selectedMember.fullName} requested ${currency.format(createdLoan.amount)} on ${createdLoan.startDate || values.startDate} at ${Number(createdLoan.rate || effectiveRate || 0)}% monthly. Reason: ${createdLoan.reason || "Not provided"}.`, type: "info", createdAt: new Date().toISOString() },
+                { id: makeId("ntf"), groupId: state.groups[0]?.id, title: approvalRequired ? "Loan approval requested" : "Loan created", body: `${selectedMember.fullName} ${approvalRequired ? `requested ${currency.format(createdLoan.amount)} on ${createdLoan.startDate || values.startDate}` : `created a loan of ${currency.format(createdLoan.amount)} on ${createdLoan.startDate || values.startDate}`} at ${Number(createdLoan.rate || effectiveRate || 0)}% monthly. Reason: ${createdLoan.reason || "Not provided"}.`, type: "info", createdAt: new Date().toISOString() },
                 ...current.notifications
               ]
             },
@@ -7345,7 +7373,7 @@ function Loans({ state, setState, actor, setConfirmDialog, setNotification }) {
             newValue: createdLoan
           }));
 
-          setNotification({ type: 'success', message: 'Loan request submitted for approval.' });
+          setNotification({ type: 'success', message: approvalRequired ? 'Loan request submitted for approval.' : 'Loan created successfully.' });
           setValues({ memberId: memberOnlyRequest ? requesterMember?.id ?? "" : state.members[0]?.id ?? "", amount: "", reason: "", startDate: toIsoDateValue() });
           setTimeout(() => setNotification(null), 3000);
         } catch (error) {
@@ -7643,7 +7671,14 @@ function Approvals({ state, setState, actor, setConfirmDialog, setNotification }
               ...nextState,
               loans: nextState.loans.map((loan) =>
                 String(loan.id) === String(target.referenceId) || String(loan.requestId) === String(target.referenceId)
-                  ? { ...loan, status: "Active", principalOutstanding: Number(loan.amount || 0), loanStatus: "ACTIVE" }
+                  ? {
+                      ...loan,
+                      status: "Active",
+                      approvalStatus: "Completed",
+                      principalOutstanding: Number(loan.amount || 0),
+                      loanStatus: "ACTIVE",
+                      startDate: loan.startDate || toIsoDateValue(new Date())
+                    }
                   : loan
               )
             };

@@ -741,37 +741,72 @@ export function allocationWaivedForMember(state, memberId, bucket, { untilDate =
     .reduce((sum, transaction) => sum + Math.abs(Math.min(0, Number(transaction.allocation?.[bucket] || 0))), 0);
 }
 
+function toDateOnly(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function getLoanInterestPeriodEndDates(group, loanStartDate, asOfDate) {
+  const dueDay = Math.min(28, Math.max(1, Number(group?.loanDueDay || 1)));
+  const start = toDateOnly(loanStartDate);
+  const end = toDateOnly(asOfDate);
+  const dueDates = [];
+  let cursor = new Date(start.getFullYear(), start.getMonth(), dueDay);
+  if (cursor < start) {
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+  while (cursor <= end) {
+    dueDates.push(new Date(cursor));
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+  return dueDates;
+}
+
+function calculateLoanInterestAccruedToDate({ loan, setup, group, asOfDate }) {
+  const loanStartDate = toDateOnly(loan.startDate || loan.distributionDate || asOfDate);
+  const targetDate = toDateOnly(asOfDate);
+  if (loanStartDate > targetDate || Number(loan.principalOutstanding || 0) <= 0) return 0;
+
+  let totalInterest = 0;
+  let periodStartDate = loanStartDate;
+  const dueDates = getLoanInterestPeriodEndDates(group, loanStartDate, targetDate);
+  dueDates.forEach((periodEndDate) => {
+    totalInterest += calculateLoanInterestForPeriod({
+      loan,
+      setup,
+      group,
+      periodStartDate,
+      periodEndDate
+    });
+    periodStartDate = new Date(periodEndDate.getFullYear(), periodEndDate.getMonth(), periodEndDate.getDate() + 1);
+  });
+  return totalInterest;
+}
+
 export function getLoanInterestForDate(loan, member, state, dateValue) {
   const group = state.groups?.[0] ?? {};
   const setup = getEffectiveMemberSetup(member, group);
-  const targetDate = new Date(dateValue || new Date());
-  const disbursementDate = new Date(loan.startDate || loan.distributionDate || targetDate);
-  const startDate = group.loanInterestStartMode === "fullMonth"
-    ? new Date(targetDate.getFullYear(), targetDate.getMonth(), 1)
-    : disbursementDate;
-  const days = group.loanInterestStartMode === "fullMonth"
-    ? 30
-    : Math.max(0, Math.ceil((targetDate - startDate) / (1000 * 60 * 60 * 24)));
-  if (days <= 0 || Number(loan.principalOutstanding || 0) <= 0) return 0;
-  return calculateLoanInterest({
-    principalOutstanding: Number(loan.principalOutstanding || 0),
-    originalPrincipal: Number(loan.amount || loan.principalOutstanding || 0),
-    monthlyRate: configuredNumber(setup.interestRate, loan.rate, 0),
-    days,
-    interestType: setup.interestType
+  const targetDate = toDateOnly(dateValue || new Date());
+  const interestAmount = calculateLoanInterestAccruedToDate({
+    loan,
+    setup,
+    group,
+    asOfDate: targetDate
   });
+  return interestAmount;
 }
 
 function calculateLoanInterestForPeriod({ loan, setup, group, periodStartDate, periodEndDate }) {
-  const loanStartDate = new Date(loan.startDate || loan.distributionDate || periodEndDate);
-  if (loanStartDate > periodEndDate || Number(loan.principalOutstanding || 0) <= 0) return 0;
+  const loanStartDate = toDateOnly(loan.startDate || loan.distributionDate || periodEndDate);
+  const periodEnd = toDateOnly(periodEndDate);
+  if (loanStartDate > periodEnd || Number(loan.principalOutstanding || 0) <= 0) return 0;
 
-  const interestStartDate = periodStartDate && periodStartDate > loanStartDate
-    ? periodStartDate
+  const interestStartDate = periodStartDate && toDateOnly(periodStartDate) > loanStartDate
+    ? toDateOnly(periodStartDate)
     : loanStartDate;
   const days = group.loanInterestStartMode === "fullMonth" && periodStartDate
     ? 30
-    : Math.max(0, Math.ceil((periodEndDate - interestStartDate) / (1000 * 60 * 60 * 24)));
+    : Math.max(0, Math.ceil((periodEnd - interestStartDate) / (1000 * 60 * 60 * 24)));
   if (days <= 0) return 0;
 
   return calculateLoanInterest({
@@ -792,12 +827,11 @@ export function calculateMemberLoanInterestDueDetails(member, state, dueDate, pa
     .filter((loan) => loanBelongsToMember(loan, member) && isOutstandingLoan(loan))
     .sort((a, b) => String(a.startDate || a.distributionDate || "").localeCompare(String(b.startDate || b.distributionDate || "")));
   const rawRows = activeLoans.map((loan) => {
-    const calculated = calculateLoanInterestForPeriod({
+    const calculated = calculateLoanInterestAccruedToDate({
       loan,
       setup,
       group,
-      periodStartDate,
-      periodEndDate: dueDate
+      asOfDate: dueDate
     });
     const migratedInterest = includeOpeningInterest ? Number(loan.interestOutstanding || 0) : 0;
     return {

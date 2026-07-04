@@ -1074,11 +1074,13 @@ export const repository = {
     });
   },
 
-  async createLoan(loan, groupId, memberId) {
+  async createLoan(loan, groupId, memberId, actorId, approvalRequired = true) {
     const client = requireClient();
     const profile = await currentProfile();
     if (!profile) throw new Error("Not signed in.");
 
+    const status = approvalRequired ? "REQUESTED" : "ACTIVE";
+    const approvalStatus = approvalRequired ? "PENDING" : "COMPLETED";
     const { data: request, error: requestError } = await client.from("loan_requests").insert([{
       request_number: nextDocumentNumber("LR"),
       group_id: groupId,
@@ -1087,8 +1089,8 @@ export const repository = {
       requested_months: loan.durationMonths,
       purpose: loan.reason,
       request_date: loan.startDate,
-      status: "REQUESTED",
-      approval_status: "PENDING",
+      status,
+      approval_status: approvalStatus,
       created_by: profile.user_id,
       last_updated_by: profile.user_id
     }]).select().single();
@@ -1100,11 +1102,13 @@ export const repository = {
       memberId,
       memberName: loan.memberName ?? "",
       amount: Number(request.requested_amount ?? 0),
-      principalOutstanding: 0,
+      principalOutstanding: Number(request.requested_amount ?? 0),
       interestOutstanding: 0,
       penaltyOutstanding: 0,
       rate: Number(loan.rate ?? 0),
-      status: "Pending Approval",
+      status: approvalRequired ? "Pending Approval" : "Active",
+      approvalStatus: approvalRequired ? "Pending" : "Completed",
+      loanStatus: approvalRequired ? "PENDING" : "ACTIVE",
       reason: request.purpose ?? "",
       durationMonths: Number(request.requested_months ?? 0),
       startDate: request.request_date,
