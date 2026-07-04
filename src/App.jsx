@@ -7817,12 +7817,26 @@ function Approvals({ state, setState, actor, setConfirmDialog, setNotification }
   );
 }
 
+function getOldestReportDate(state) {
+  const candidateDates = [
+    ...(getCompletedTransactions(state.transactions || []) || []).map((item) => item.transactionDate || item.createdAt),
+    ...(getCompletedTransactions(state.expenses || []) || []).map((item) => item.transactionDate || item.expenseDate || item.createdAt),
+    ...(state.loans || []).map((item) => item.startDate || item.distributionDate || item.requestDate || item.createdAt),
+    ...(state.withdrawalRequests || []).map((item) => item.requestDate || item.createdAt),
+    ...(state.legacyImports || []).map((item) => item.migration_date || item.migrationDate || item.joined_date || item.joinedDate || item.created_at || item.createdAt),
+    ...(state.legacyGroupOpenings || []).map((item) => item.migration_date || item.migrationDate || item.opening_date || item.openingDate || item.created_at || item.createdAt),
+    ...(state.shareDistributions || []).map((item) => item.distribution_date || item.distributionDate || item.created_at || item.createdAt),
+    ...(state.shareAdjustments || []).map((item) => item.adjustment_date || item.adjustmentDate || item.created_at || item.createdAt)
+  ].filter(Boolean).map((value) => String(value).slice(0, 10)).filter((value) => /^\d{4}-\d{2}-\d{2}$/.test(value));
+
+  return candidateDates.sort()[0] || toIsoDateValue();
+}
+
 function Reports({ state, actor, setNotification }) {
   const todayIso = toIsoDateValue();
-  const monthStartIso = `${todayIso.slice(0, 8)}01`;
-  const [draftStartDate, setDraftStartDate] = useState(monthStartIso);
+  const oldestReportDate = getOldestReportDate(state);
   const [draftEndDate, setDraftEndDate] = useState(todayIso);
-  const [reportRange, setReportRange] = useState({ startDate: monthStartIso, endDate: todayIso });
+  const [reportRange, setReportRange] = useState({ startDate: oldestReportDate, endDate: todayIso });
   const snapshotState = getStateTillDate(state, reportRange.endDate);
   const rangeTransactions = getCompletedTransactions(snapshotState.transactions || [])
     .filter((transaction) => isIsoDateInRange(transaction.transactionDate, reportRange.startDate, reportRange.endDate));
@@ -7861,6 +7875,15 @@ function Reports({ state, actor, setNotification }) {
   const groupLoanDisbursedInRange = rangeLoans.reduce((sum, loan) => sum + Number(loan.amount || 0), 0);
   const groupLoanBalanceInRange = Math.max(0, groupLoanDisbursedInRange - groupPrincipalRepaidInRange);
   const groupRemainingInRange = groupSavingsInRange + groupPrincipalRepaidInRange + groupGainInRange - groupExpensesInRange - groupWithdrawnInRange - groupLoanBalanceInRange;
+  const pendingDues = calculatePendingDues(snapshotState, actor, false);
+  const pendingDuesByMember = pendingDues.reduce((map, row) => {
+    const memberId = String(row.memberId);
+    const existing = map.get(memberId) || [];
+    existing.push(row);
+    map.set(memberId, existing);
+    return map;
+  }, new Map());
+
   const memberSummaries = (snapshotState.members || []).map((member) => {
     const memberTransactions = rangeTransactions
       .filter((transaction) => String(transaction.memberId) === String(member.id));
@@ -7900,6 +7923,9 @@ function Reports({ state, actor, setNotification }) {
     const penaltyDue = memberLoansInRange.reduce((sum, loan) => sum + Number(loan.penaltyOutstanding || 0), 0);
     const shareAmountInRange = savingsInRange + gainInRange - expenseInRange - withdrawnInRange;
     const hasRangeActivity = memberTransactions.length > 0 || memberLoansInRange.length > 0;
+    const memberPendingDues = (pendingDuesByMember.get(String(member.id)) || [])
+      .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+    const nextDue = memberPendingDues[0] || null;
 
     return {
       member,
@@ -7913,6 +7939,8 @@ function Reports({ state, actor, setNotification }) {
       principalOutstanding,
       interestDue,
       penaltyDue,
+      nextEmiAmount: Number(nextDue?.totalDue || 0),
+      nextDueDate: nextDue ? String(nextDue.dueDate || "").slice(0, 10) : "-",
       hasRangeActivity
     };
   }).filter((row) => row.hasRangeActivity);
@@ -7932,10 +7960,12 @@ function Reports({ state, actor, setNotification }) {
     currency.format(row.principalOutstanding),
     currency.format(row.interestDue),
     currency.format(row.penaltyDue),
+    currency.format(row.nextEmiAmount),
+    row.nextDueDate,
     currency.format(row.principalOutstanding + row.interestDue + row.penaltyDue),
     currency.format(row.withdrawnInRange)
   ]);
-  const groupHeaders = ["Group", "Members with activity", "Collected in range", "Savings in range", "Income/Gain in range", "Expenses in range", "Remaining in range", "Loans disbursed in range", "Principal outstanding in range", "Interest due in range", "Penalty due in range", "Total share in range", "Withdrawn in range"];
+  const groupHeaders = ["Group", "Members with activity", "Collected", "Savings", "Income/Gain", "Expenses", "Remaining", "Loans disbursed", "Principal outstanding", "Interest due", "Penalty due", "Total share", "Withdrawn"];
   const groupRows = [[
     snapshotState.groups?.[0]?.name || "Group",
     memberSummaries.length,
@@ -7951,9 +7981,9 @@ function Reports({ state, actor, setNotification }) {
     currency.format(groupShareAmount),
     currency.format(groupWithdrawnInRange)
   ]];
-  const memberHeaders = ["Member", "Username", "Status", "Collected in range", "Savings in range", "Income/Gain in range", "Expense in range", "Share amount in range", "Loans in range", "Principal outstanding in range", "Interest due in range", "Penalty due in range", "Total loan balance in range", "Withdrawn in range"];
+  const memberHeaders = ["Member", "Username", "Status", "Collected", "Savings", "Income/Gain", "Expense", "Share amount", "Loans", "Principal outstanding", "Interest due", "Penalty due", "Next EMI amount", "Next due date", "Total loan balance", "Withdrawn"];
   const reportText = formatReportTablesText({
-    title: `Bachat Gat report ${reportRange.startDate} to ${reportRange.endDate}`,
+    title: `Bachat Gat report till ${reportRange.endDate}`,
     sections: [
       { title: "Group summary", headers: groupHeaders, rows: groupRows },
       { title: "Member summary", headers: memberHeaders, rows: memberRows }
@@ -7986,7 +8016,7 @@ function Reports({ state, actor, setNotification }) {
           className="form-grid single-control-form report-generate-form"
           onSubmit={(event) => {
             event.preventDefault();
-            const nextStartDate = draftStartDate || monthStartIso;
+            const nextStartDate = reportRange.startDate || oldestReportDate;
             const nextEndDate = draftEndDate || todayIso;
             setReportRange({
               startDate: nextStartDate <= nextEndDate ? nextStartDate : nextEndDate,
@@ -7994,11 +8024,10 @@ function Reports({ state, actor, setNotification }) {
             });
           }}
         >
-          <Field label="Start date" type="date" value={draftStartDate} onChange={setDraftStartDate} />
-          <Field label="End date" type="date" value={draftEndDate} onChange={setDraftEndDate} />
+          <Field label="Report till date" type="date" value={draftEndDate} onChange={setDraftEndDate} />
           <button className="primary-button" type="submit">Generate report</button>
         </form>
-        <p className="section-note">Showing only values available from {reportRange.startDate} to {reportRange.endDate}.</p>
+        <p className="section-note">Showing values from {reportRange.startDate} to {reportRange.endDate}.</p>
       </Section>
       <Section title="Group summary">
         <div className="button-row" style={{ marginBottom: 14 }}>
