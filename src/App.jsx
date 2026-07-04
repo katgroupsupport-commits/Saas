@@ -6411,7 +6411,6 @@ function Waivers({ state, setState, actor, setConfirmDialog, setNotification }) 
   const dueDate = getLoanDueDate(state.groups?.[0]);
   const interestDue = selectedMember
     ? calculateMemberLoanInterestDue(selectedMember, state, dueDate)
-      + Number(selectedMember.interestOutstanding || 0)
     : 0;
   const penaltyDue = selectedMember
     ? calculatePendingDues(state, actor, false)

@@ -762,29 +762,50 @@ export function getLoanInterestForDate(loan, member, state, dateValue) {
   });
 }
 
-export function calculateMemberLoanInterestDueDetails(member, state, dueDate, paymentUntilDate = dueDate) {
+function calculateLoanInterestForPeriod({ loan, setup, group, periodStartDate, periodEndDate }) {
+  const loanStartDate = new Date(loan.startDate || loan.distributionDate || periodEndDate);
+  if (loanStartDate > periodEndDate || Number(loan.principalOutstanding || 0) <= 0) return 0;
+
+  const interestStartDate = periodStartDate && periodStartDate > loanStartDate
+    ? periodStartDate
+    : loanStartDate;
+  const days = group.loanInterestStartMode === "fullMonth" && periodStartDate
+    ? 30
+    : Math.max(0, Math.ceil((periodEndDate - interestStartDate) / (1000 * 60 * 60 * 24)));
+  if (days <= 0) return 0;
+
+  return calculateLoanInterest({
+    principalOutstanding: Number(loan.principalOutstanding || 0),
+    originalPrincipal: Number(loan.amount || loan.principalOutstanding || 0),
+    monthlyRate: configuredNumber(setup.interestRate, loan.rate, 0),
+    days,
+    interestType: setup.interestType
+  });
+}
+
+export function calculateMemberLoanInterestDueDetails(member, state, dueDate, paymentUntilDate = dueDate, interestFromDate = null, includeOpeningInterest = true) {
   const group = state.groups?.[0] ?? {};
   const setup = getEffectiveMemberSetup(member, group);
   const paymentUntilIso = toIsoDateValue(paymentUntilDate);
+  const periodStartDate = interestFromDate ? new Date(interestFromDate) : null;
   const activeLoans = (state.loans || [])
     .filter((loan) => loanBelongsToMember(loan, member) && isOutstandingLoan(loan))
     .sort((a, b) => String(a.startDate || a.distributionDate || "").localeCompare(String(b.startDate || b.distributionDate || "")));
   const rawRows = activeLoans.map((loan) => {
-    const start = new Date(loan.startDate || loan.distributionDate || new Date());
-    const days = Math.max(0, Math.ceil((dueDate - start) / (1000 * 60 * 60 * 24)));
-    const calculated = days > 0 ? calculateLoanInterest({
-      principalOutstanding: Number(loan.principalOutstanding || 0),
-      originalPrincipal: Number(loan.amount || loan.principalOutstanding || 0),
-      monthlyRate: configuredNumber(setup.interestRate, loan.rate, 0),
-      days,
-      interestType: setup.interestType
-    }) : 0;
+    const calculated = calculateLoanInterestForPeriod({
+      loan,
+      setup,
+      group,
+      periodStartDate,
+      periodEndDate: dueDate
+    });
+    const migratedInterest = includeOpeningInterest ? Number(loan.interestOutstanding || 0) : 0;
     return {
       loan,
       calculated,
-      migratedInterest: Number(loan.interestOutstanding || 0),
-      dueBeforePayments: calculated + Number(loan.interestOutstanding || 0),
-      due: calculated + Number(loan.interestOutstanding || 0)
+      migratedInterest,
+      dueBeforePayments: calculated + migratedInterest,
+      due: calculated + migratedInterest
     };
   });
   let paid = allocationPaidForMember(state, member?.id, "interest", { untilDate: paymentUntilIso });
@@ -834,8 +855,8 @@ export function getLoanDueDate(group) {
   return candidate;
 }
 
-export function calculateMemberLoanInterestDue(member, state, dueDate, paymentUntilDate = dueDate) {
-  return calculateMemberLoanInterestDueDetails(member, state, dueDate, paymentUntilDate)
+export function calculateMemberLoanInterestDue(member, state, dueDate, paymentUntilDate = dueDate, interestFromDate = null, includeOpeningInterest = true) {
+  return calculateMemberLoanInterestDueDetails(member, state, dueDate, paymentUntilDate, interestFromDate, includeOpeningInterest)
     .reduce((sum, row) => sum + Number(row.due || 0), 0);
 }
 
@@ -878,6 +899,22 @@ export function calculatePendingDues(state, actor = null, memberOnly = false) {
     .filter((member) => member.status !== "Inactive")
     .filter((member) => !targetMember || String(member.id) === String(targetMember.id));
   const periods = getDuePeriods(state);
+  const firstDuePeriodByMember = new Map();
+  periods.forEach((period) => {
+    const dueDate = getPeriodDueDate(group, period);
+    if (dueDate < groupStartDate) return;
+    members.forEach((member) => {
+      if (firstDuePeriodByMember.has(String(member.id))) return;
+      const hasOutstandingLoan = (state.loans || []).some((loan) =>
+        loanBelongsToMember(loan, member)
+        && isOutstandingLoan(loan)
+        && new Date(loan.startDate || period.startDate) <= dueDate
+      );
+      if (hasOutstandingLoan) {
+        firstDuePeriodByMember.set(String(member.id), period.id);
+      }
+    });
+  });
 
   return periods.flatMap((period) => {
     const dueDate = getPeriodDueDate(group, period);
@@ -919,7 +956,8 @@ export function calculatePendingDues(state, actor = null, memberOnly = false) {
           )
         : 0;
       const principalDue = Math.min(outstandingPrincipal, Math.max(0, principalDueBeforePayment - principalPaidInCycle));
-      const interestDue = calculateMemberLoanInterestDue(member, state, dueDate, paymentCutoff);
+      const includeOpeningInterest = firstDuePeriodByMember.get(String(member.id)) === period.id;
+      const interestDue = calculateMemberLoanInterestDue(member, state, dueDate, paymentCutoff, cycleStart, includeOpeningInterest);
       const allPenaltyPaidTillCutoff = allocationPaidForMember(state, member.id, "penalty", { untilDate: paymentCutoffIso });
       const allPenaltyWaivedTillCutoff = allocationWaivedForMember(state, member.id, "penalty", { untilDate: paymentCutoffIso });
       const openingPenaltyDue = Number(member.penaltyOutstanding || 0)
