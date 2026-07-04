@@ -4,7 +4,7 @@ import { roles } from "./permissions";
 
 function requireClient() {
   if (!supabase) {
-    throw new Error("Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
+    throw new Error("Cloud sync is not configured.");
   }
   return supabase;
 }
@@ -102,7 +102,7 @@ async function ensureProfile(authUser) {
     const message = String(error.message ?? error.details ?? "").toLowerCase();
     if (error.code === "23503" || message.includes("auth_users_supabase_user_id_fkey")) {
       await client.auth.signOut();
-      throw new Error("Your browser had an old deleted Supabase login session. The app signed it out. Register or login again to continue fresh.");
+      throw new Error("Your browser had an old deleted login session. The app signed it out. Register or login again to continue fresh.");
     }
     throw error;
   }
@@ -500,7 +500,7 @@ async function createFinancialTransaction({ transaction, parentId = null, adjust
 function describeFunctionError(error, functionName) {
   const message = error?.message ?? String(error ?? "");
   if (message.toLowerCase().includes("failed to send a request")) {
-    return new Error(`Unable to reach Supabase Edge Function "${functionName}". Deploy it in Supabase and confirm Edge Function secrets are configured.`);
+    return new Error(`Unable to reach secure service "${functionName}". Confirm the service is deployed and its secrets are configured.`);
   }
   return error instanceof Error ? error : new Error(message);
 }
@@ -560,7 +560,7 @@ export const repository = {
 
     const { data, error } = await client.auth.signInWithPassword({ email, password });
     if (error) throw error;
-    if (!data.user) throw new Error("Supabase did not return an authenticated user.");
+    if (!data.user) throw new Error("Secure login did not return an authenticated user.");
     return mapProfile(await ensureProfile(data.user));
   },
 
@@ -592,7 +592,7 @@ export const repository = {
       }
     });
     if (error) throw error;
-    if (!data.user) throw new Error("Supabase did not return a new user.");
+    if (!data.user) throw new Error("Secure login did not return a new user.");
     if (!data.session) throw new Error("Account created. Confirm the email address, then login.");
     return mapProfile(await ensureProfile(data.user));
   },

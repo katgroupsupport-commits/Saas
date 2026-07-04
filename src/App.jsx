@@ -85,7 +85,7 @@ const SUPABASE_BOOT_TIMEOUT_MS = 12000;
 function withTimeout(promise, ms, label) {
   let timeoutId;
   const timeout = new Promise((_, reject) => {
-    timeoutId = setTimeout(() => reject(new Error(`${label} timed out. Please check your internet connection and Supabase project status.`)), ms);
+    timeoutId = setTimeout(() => reject(new Error(`${label} timed out. Please check your internet connection and try again.`)), ms);
   });
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
 }
@@ -363,7 +363,7 @@ function App() {
     let active = true;
     async function boot() {
       try {
-        const user = await withTimeout(repository.getSessionUser(), SUPABASE_BOOT_TIMEOUT_MS, "Supabase session check");
+        const user = await withTimeout(repository.getSessionUser(), SUPABASE_BOOT_TIMEOUT_MS, "Session check");
         if (!active) return;
 
         if (!user) {
@@ -406,7 +406,7 @@ function App() {
         if (active) {
           setNotification({
             type: "warning",
-            message: "Supabase is taking too long. Opened cached data instead.",
+            message: "Connection is taking too long. Opened cached data instead.",
             details: serializeError(error)
           });
         }
@@ -468,8 +468,8 @@ function App() {
       }
 
       const signedInUser = credentials.mode === "login"
-        ? await withTimeout(repository.signIn(credentials.values.identifier, credentials.values.password), SUPABASE_BOOT_TIMEOUT_MS, "Supabase login")
-        : await withTimeout(repository.getSessionUser(), SUPABASE_BOOT_TIMEOUT_MS, "Supabase session check");
+        ? await withTimeout(repository.signIn(credentials.values.identifier, credentials.values.password), SUPABASE_BOOT_TIMEOUT_MS, "Login")
+        : await withTimeout(repository.getSessionUser(), SUPABASE_BOOT_TIMEOUT_MS, "Session check");
       const tenantData = await withTimeout(repository.listTenantData(), SUPABASE_BOOT_TIMEOUT_MS, "Tenant data loading");
       setState({ ...tenantData, session: { signedIn: true, user: signedInUser } });
       navigate("/select-group", { replace: true });
@@ -489,7 +489,7 @@ function App() {
   }
 
   if (booting) {
-    return <StatusScreen title="Loading secure session" message="Connecting to Supabase and loading tenant data." />;
+    return <StatusScreen title="Loading secure session" message="Connecting securely and loading your data." />;
   }
 
   if (appError) {
@@ -1095,7 +1095,7 @@ function ContactPage() {
           <Field label="Message" value={values.message} onChange={(value) => setValues({ ...values, message: value })} />
           <button className="primary-button" type="submit">Send message</button>
         </form>
-        {sent && <p className="section-note">Message captured. Email sending can be connected through Supabase Edge Functions.</p>}
+        {sent && <p className="section-note">Message captured. Email sending can be connected through the secure server.</p>}
       </section>
       <PublicSection title="Support" items={["support@bachatgat.example", "+91 90000 00000", "Business hours: 10 AM to 6 PM IST"]} />
     </PublicPage>
@@ -1173,7 +1173,7 @@ function QaGuide() {
     ["What does old saving/share mean?", "It is the member's old saved amount or calculated share from old records. Post it as a completed Saving transaction so dashboards include it."],
     ["What does old pending loan mean?", "It means old loan principal still to be paid by the member. Use it while calculating the legacy share and future dues."],
     ["When should I open a period?", "Open the month where entries are allowed. Transactions are expected to be posted only in the open period."],
-    ["Why is my transaction blocked?", "Usually because no period is open, the date is outside the open period, required setup is missing, or the record is not yet persisted in Supabase."],
+    ["Why is my transaction blocked?", "Usually because no period is open, the date is outside the open period, required setup is missing, or the record is not yet saved online."],
     ["How does transaction split work?", "When you enter collected amount, the app splits it into savings, interest, penalty, principal and excess based on dues. You can edit splits, but total cannot exceed collected amount."],
     ["What is excess amount?", "Excess is the remaining amount after other split fields. It cannot be negative and it should not make total split greater than collected amount."],
     ["Why are pending approvals not shown in dashboard totals?", "Pending entries are not final. Dashboard values update only after approval is Completed."],
@@ -1196,7 +1196,7 @@ function QaGuide() {
     ["Why does a dashboard value change after approval?", "Because the app counts only Completed financial entries. Approval completion moves the entry into final dashboard totals."],
     ["How do I generate report?", "Open Reports, choose start date and end date, click Generate Report, then use Copy / Share report to send the readable summary."],
     ["Why is my report empty for a member?", "If the member had no transactions or loans in the selected date range, that member may not appear in the range report."],
-    ["What should I do before deploying or refreshing?", "Save setup changes, confirm approvals if required, and make sure Supabase migrations are applied when new database fields are added."],
+    ["What should I do before deploying or refreshing?", "Save setup changes, confirm approvals if required, and make sure the latest database updates are applied when new fields are added."],
     ["Why did approver disappear after refresh earlier?", "That happened when approvers were not persisted to the database. After the persistence fix and migration, saved approvers should load after refresh."],
     ["What should I check if a payment value looks wrong?", "Check whether the period is correct, approval is completed, transaction split total matches collected amount, and any correction or waiver has been approved."],
     ["Can I use the app without approvers?", "Yes. If no approvers are configured, entries can complete immediately. For safer workflow, configure approvers."],
@@ -1653,7 +1653,7 @@ function AuthScreen({ onSignIn }) {
         <div>
           <p className="eyebrow">Bachat Gat SaaS</p>
           <h1>{mode === "login" ? "Login" : mode === "resetPassword" ? "Reset password" : "Register group user"}</h1>
-          <p>{isSupabaseConfigured ? "Supabase Auth is enabled." : "Demo mode is active until Supabase credentials are added."}</p>
+          <p>{isSupabaseConfigured ? "Secure login is enabled." : "Demo mode is active until secure login is enabled."}</p>
         </div>
         <form className="form-grid" onSubmit={submit}>
           {mode === "login" ? (
@@ -2482,14 +2482,14 @@ function GroupSelectionPage({ state, setState, selectedGroupId, setSelectedGroup
     setErrors(result.errors);
     if (!result.data) return;
     if (!repository.isConfigured()) {
-      setNotification({ type: "error", message: "Supabase is not configured. Enable Supabase to save groups to backend." });
+      setNotification({ type: "error", message: "Cloud sync is not configured. Enable secure storage to save groups." });
       setTimeout(() => setNotification(null), 4000);
       return;
     }
 
     setConfirmDialog({
       title: 'Save group',
-      message: 'Save group to backend? Confirm to commit.',
+      message: 'Save group online? Confirm to commit.',
       onConfirm: async () => {
         setConfirmDialog(null);
         try {
@@ -2525,18 +2525,18 @@ function GroupSelectionPage({ state, setState, selectedGroupId, setSelectedGroup
           setSelectedGroupId(createdGroup.id);
           setValues({ name: '', primaryContact: '' });
           setShowCreateForm(false);
-          setNotification({ type: 'success', message: 'Group saved to backend.' });
+          setNotification({ type: 'success', message: 'Group saved online.' });
           setTimeout(() => setNotification(null), 3000);
           navigate('/', { replace: true });
         } catch (error) {
           console.error('Create group failed', error);
-          setNotification({ type: 'error', message: `Unable to save group to backend: ${error.message}` });
+          setNotification({ type: 'error', message: `Unable to save group online: ${error.message}` });
           setTimeout(() => setNotification(null), 5000);
         }
       },
       onCancel: () => {
         setConfirmDialog(null);
-        setNotification({ type: 'info', message: 'Group not saved to backend.' });
+        setNotification({ type: 'info', message: 'Group not saved online.' });
         setTimeout(() => setNotification(null), 3000);
       }
     });
@@ -2778,9 +2778,9 @@ function Members({ state, setState, actor, setConfirmDialog, setNotification }) 
       shares: 0
     };
 
-    // Require backend save when Supabase is configured
+    // Require online save when cloud sync is configured.
     if (!repository.isConfigured()) {
-      setNotification({ type: 'error', message: 'Supabase is not configured. Enable Supabase to save members to backend.' });
+      setNotification({ type: 'error', message: 'Cloud sync is not configured. Enable secure storage to save members.' });
       setTimeout(() => setNotification(null), 4000);
       return;
     }
@@ -2800,7 +2800,7 @@ function Members({ state, setState, actor, setConfirmDialog, setNotification }) 
 
     setConfirmDialog({
       title: 'Save member',
-      message: 'Save member to backend? Confirm to commit.',
+      message: 'Save member online? Confirm to commit.',
       onConfirm: async () => {
         setConfirmDialog(null);
         try {
@@ -2842,17 +2842,17 @@ function Members({ state, setState, actor, setConfirmDialog, setNotification }) 
             recordId: createdMember.id,
             newValue: memberForState
           }));
-          setNotification({ type: 'success', message: hasGroupApprovers ? 'Member addition sent for approval.' : 'Member saved to backend.' });
+          setNotification({ type: 'success', message: hasGroupApprovers ? 'Member addition sent for approval.' : 'Member saved online.' });
           setTimeout(() => setNotification(null), 3000);
         } catch (error) {
           console.error('Create member failed', error);
-          setNotification({ type: 'error', message: `Unable to save member to backend: ${error.message}` });
+          setNotification({ type: 'error', message: `Unable to save member online: ${error.message}` });
           setTimeout(() => setNotification(null), 5000);
         }
       },
       onCancel: () => {
         setConfirmDialog(null);
-        setNotification({ type: 'info', message: 'Member not saved to backend.' });
+        setNotification({ type: 'info', message: 'Member not saved online.' });
         setTimeout(() => setNotification(null), 3000);
       }
     });
@@ -3060,7 +3060,7 @@ function Subscriptions({ state, setState, actor, selectedGroup, setConfirmDialog
       return;
     }
     if (!repository.isConfigured()) {
-      setNotification({ type: "error", message: "Supabase must be configured before Razorpay payments can be used." });
+      setNotification({ type: "error", message: "Cloud sync must be enabled before payments can be used." });
       return;
     }
     if (!import.meta.env.VITE_RAZORPAY_KEY_ID) {
@@ -3400,7 +3400,7 @@ function SetupPage({ state, setState, actor, selectedGroup, initialSetupTab = "g
       onConfirm: async () => {
         setConfirmDialog(null);
         if (!repository.isConfigured()) {
-          setNotification({ type: "error", message: "Supabase is not configured. Enable Supabase to persist group setup." });
+          setNotification({ type: "error", message: "Cloud sync is not configured. Enable secure storage to save group setup." });
           setTimeout(() => setNotification(null), 4000);
           return;
         }
@@ -3544,7 +3544,7 @@ function SetupPage({ state, setState, actor, selectedGroup, initialSetupTab = "g
       onConfirm: async () => {
         setConfirmDialog(null);
         if (!repository.isConfigured()) {
-          setNotification({ type: 'error', message: 'Supabase is not configured. Enable Supabase to persist member setup.' });
+          setNotification({ type: 'error', message: 'Cloud sync is not configured. Enable secure storage to save member setup.' });
           setTimeout(() => setNotification(null), 4000);
           return;
         }
@@ -4050,30 +4050,14 @@ function SetupPage({ state, setState, actor, selectedGroup, initialSetupTab = "g
           <Field
             label="Email"
             type="email"
-            value={selectedMember?.email ?? ""}
-            onChange={(value) => {
-              setState((current) => ({
-                ...current,
-                members: current.members.map((member) =>
-                  member.id === selectedMemberId ? { ...member, email: value } : member
-                )
-              }));
-              setMemberSetupValues((current) => ({ ...current, email: value }));
-            }}
+            value={memberSetupValues.email}
+            onChange={(value) => setMemberSetupValues((current) => ({ ...current, email: value }))}
           />
           <Field
             label="Mobile"
             type="tel"
-            value={selectedMember?.mobile ?? ""}
-            onChange={(value) => {
-              setState((current) => ({
-                ...current,
-                members: current.members.map((member) =>
-                  member.id === selectedMemberId ? { ...member, mobile: value } : member
-                )
-              }));
-              setMemberSetupValues((current) => ({ ...current, mobile: value }));
-            }}
+            value={memberSetupValues.mobile}
+            onChange={(value) => setMemberSetupValues((current) => ({ ...current, mobile: value }))}
           />
           <Field
             label="Username"
@@ -4818,7 +4802,7 @@ function SetupPage({ state, setState, actor, selectedGroup, initialSetupTab = "g
                                 exitDate: legacyExitDate
                               });
                             }
-                            // Persist one legacy import row; the backend converts it into ledger lines.
+                            // Persist one legacy import row; the service converts it into ledger lines.
                             try {
                               const persistedMigration = await repository.createLegacyImport({
                                 groupId: state.groups[0]?.id,
@@ -4866,7 +4850,7 @@ function SetupPage({ state, setState, actor, selectedGroup, initialSetupTab = "g
                                   }
                                 ]
                               }));
-                              setNotification({ type: 'warning', message: 'Saved migration locally — backend persist failed.' });
+                              setNotification({ type: 'warning', message: 'Saved migration locally. Online save failed.' });
                             }
                             if (migrationExpense) {
                               migrationExpense = await repository.createGroupExpense({
@@ -5398,7 +5382,7 @@ function Transactions({ state, setState, actor, setSelectedGroupId, setConfirmDi
     }
 
     if (!repository.isConfigured()) {
-      setNotification({ type: 'error', message: 'Supabase is not configured. Enable Supabase to post transactions to backend.' });
+      setNotification({ type: 'error', message: 'Cloud sync is not configured. Enable secure storage to post transactions.' });
       setTimeout(() => setNotification(null), 4000);
       return;
     }
@@ -5422,7 +5406,7 @@ function Transactions({ state, setState, actor, setSelectedGroupId, setConfirmDi
           subscriptionStatus: localGroup.subscriptionStatus || 'Active'
         });
 
-        // Refresh tenant data from backend to get canonical members/periods
+        // Refresh tenant data to get canonical members/periods.
         const tenantData = await repository.listTenantData();
         setState((current) => ({ ...tenantData }));
         setSelectedGroupId(createdGroup.id);
@@ -5452,7 +5436,7 @@ function Transactions({ state, setState, actor, setSelectedGroupId, setConfirmDi
       }
     }
 
-    // Auto-persist member if we have a local/demo member but the group exists in backend
+    // Auto-persist member if we have a local/demo member but the group exists online.
     if (!isGroupExpense && !isUuid(effectiveMemberId) && isUuid(effectiveGroupId)) {
       try {
         const created = await repository.createMember(
@@ -5491,7 +5475,7 @@ function Transactions({ state, setState, actor, setSelectedGroupId, setConfirmDi
       }
     }
 
-    // If the open period is still a local/demo period id, refresh backend tenant data to pick up a persisted period
+    // If the open period is still a local/demo period id, refresh tenant data to pick up a persisted period.
     if (isUuid(effectiveGroupId) && effectivePeriod && !isUuid(effectivePeriod?.id)) {
       try {
         const tenantData = await repository.listTenantData();
@@ -5543,8 +5527,8 @@ function Transactions({ state, setState, actor, setSelectedGroupId, setConfirmDi
                       `effectivePeriodId: ${effectivePeriod?.id} (isUuid: ${pOk})\n` +
                       `actorId: ${actor?.id} (isUuid: ${aOk})\n`;
       const baseMessage = !aOk
-        ? 'You must sign in with Supabase before posting transactions.'
-        : 'Group/member/period/actor must be persisted in backend before posting transactions.';
+        ? 'You must sign in before posting transactions.'
+        : 'Group/member/period/user must be saved online before posting transactions.';
       console.warn('Transaction blocked - persistence checks failed', { effectiveGroupId, effectiveMemberId, effectivePeriod: effectivePeriod?.id, actorId: actor?.id });
       setNotification({ type: 'error', message: baseMessage, details });
       setState((current) => ({
@@ -5561,7 +5545,7 @@ function Transactions({ state, setState, actor, setSelectedGroupId, setConfirmDi
 
     setConfirmDialog({
       title: isGroupExpense ? 'Save group expense' : 'Save transaction',
-      message: isGroupExpense ? 'Save this group expense to backend? Confirm to commit.' : 'Save transaction to backend? Confirm to commit.',
+      message: isGroupExpense ? 'Save this group expense online? Confirm to commit.' : 'Save transaction online? Confirm to commit.',
       onConfirm: async () => {
         setConfirmDialog(null);
         try {
@@ -5754,7 +5738,7 @@ function Transactions({ state, setState, actor, setSelectedGroupId, setConfirmDi
       },
       onCancel: () => {
         setConfirmDialog(null);
-        setNotification({ type: 'info', message: 'Transaction not saved to backend.' });
+        setNotification({ type: 'info', message: 'Transaction not saved online.' });
         setTimeout(() => setNotification(null), 3000);
       }
     });
@@ -7297,16 +7281,16 @@ function Loans({ state, setState, actor, setConfirmDialog, setNotification }) {
       startDate: result.data.startDate
     };
 
-    // Require backend save when Supabase is configured
+    // Require online save when cloud sync is configured.
     if (!repository.isConfigured()) {
-      setNotification({ type: 'error', message: 'Supabase is not configured. Enable Supabase to save loans to backend.' });
+      setNotification({ type: 'error', message: 'Cloud sync is not configured. Enable secure storage to save loans.' });
       setTimeout(() => setNotification(null), 4000);
       return;
     }
 
     const primaryGroupId = state.groups[0]?.id;
     if (!isUuid(primaryGroupId) || !isUuid(selectedMember.id) || !isUuid(actor?.id)) {
-      setNotification({ type: 'error', message: 'Group/member or actor not persisted. Ensure group and member are saved in backend first.' });
+      setNotification({ type: 'error', message: 'Group/member or user is not saved online. Save the group and member first.' });
       setTimeout(() => setNotification(null), 4000);
       return;
     }
@@ -7355,13 +7339,13 @@ function Loans({ state, setState, actor, setConfirmDialog, setNotification }) {
           setTimeout(() => setNotification(null), 3000);
         } catch (error) {
           console.error('Create loan failed', error);
-          setNotification({ type: 'error', message: `Unable to save loan to backend: ${error.message}` });
+          setNotification({ type: 'error', message: `Unable to save loan online: ${error.message}` });
           setTimeout(() => setNotification(null), 5000);
         }
       },
       onCancel: () => {
         setConfirmDialog(null);
-        setNotification({ type: 'info', message: 'Loan not saved to backend.' });
+        setNotification({ type: 'info', message: 'Loan not saved online.' });
         setTimeout(() => setNotification(null), 3000);
       }
     });
@@ -8493,7 +8477,7 @@ function MemberProfile({ state, setState, actor, setConfirmDialog, setNotificati
         }
         setNotification({ type: "success", message: "Profile photo updated." });
       } catch (error) {
-        setNotification({ type: "warning", message: "Photo updated on this device. Run the profile photo SQL patch to save it in Supabase.", details: serializeError(error) });
+        setNotification({ type: "warning", message: "Photo updated on this device. Apply the profile photo database update to save it online.", details: serializeError(error) });
       }
     };
     reader.readAsDataURL(file);
