@@ -1814,6 +1814,12 @@ function Dashboard({ role, state, actor, forceGroupView = false, memberPortal = 
   const dashboardPeriod = getDashboardPeriod(state);
   const dashboardCards = calculateDashboardCards(state, dashboardPeriod).cards;
   const memberFields = financeFieldDictionary.member;
+  const group = state.groups?.[0] ?? {};
+  const financialDueDate = getLoanDueDate(group);
+  const financialPeriodStart = new Date(financialDueDate);
+  financialPeriodStart.setMonth(financialPeriodStart.getMonth() - 1);
+  financialPeriodStart.setDate(financialPeriodStart.getDate() + 1);
+  const financialPeriodLabel = `${financialPeriodStart.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} - ${financialDueDate.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`;
 
   if ((role === roles.MEMBER || memberPortal) && !forceGroupView) {
     const canChooseMember = role !== roles.MEMBER;
@@ -2063,6 +2069,11 @@ function Dashboard({ role, state, actor, forceGroupView = false, memberPortal = 
             `Activated this month: ${dashboardCards.activeLoans.subfields.activatedThisMonth ?? 0}`,
             `Overdue loans: ${dashboardCards.activeLoans.subfields.overdueLoans ?? 0}`,
             `Pending approval loans: ${dashboardCards.activeLoans.subfields.pendingApprovalLoans ?? 0}`
+          ]),
+          metric("Financial Period", financialPeriodLabel, CalendarCheck, [
+            `Cycle start: ${financialPeriodStart.toLocaleDateString("en-IN", { year: "numeric", month: "long", day: "numeric" })}`,
+            `Repayment date: ${financialDueDate.toLocaleDateString("en-IN", { year: "numeric", month: "long", day: "numeric" })}`,
+            `Repayment day: ${Math.min(28, Math.max(1, Number(group.loanDueDay || 1)))}`
           ]),
           metric(dashboardCards.openPeriod.label, dashboardCards.openPeriod.header ?? "None", ShieldCheck, [
             `Current open month: ${dashboardCards.openPeriod.subfields.currentOpenMonth ?? "None"}`,
