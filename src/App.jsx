@@ -2753,6 +2753,27 @@ function GroupSelectionPage({ state, setState, selectedGroupId, setSelectedGroup
   );
 }
 
+function hasMemberGroupActivity(member, state) {
+  if (!member) return false;
+  const memberId = String(member.id ?? member.memberId ?? "");
+  const matchesMemberId = (candidate) => String(candidate ?? "") === memberId;
+
+  const hasTransactionActivity = (state.transactions || []).some((transaction) =>
+    [transaction.memberId, transaction.member_id, transaction.member?.id, transaction.member?.memberId, transaction.member?.member_id]
+      .some(matchesMemberId)
+  );
+  const hasLoanActivity = (state.loans || []).some((loan) =>
+    [loan.memberId, loan.member_id, loan.member?.id, loan.member?.memberId, loan.member?.member_id]
+      .some(matchesMemberId)
+  );
+  const hasWithdrawalActivity = (state.withdrawals || []).some((withdrawal) =>
+    [withdrawal.memberId, withdrawal.member_id, withdrawal.member?.id, withdrawal.member?.memberId, withdrawal.member?.member_id]
+      .some(matchesMemberId)
+  );
+
+  return hasTransactionActivity || hasLoanActivity || hasWithdrawalActivity;
+}
+
 function Members({ state, setState, actor, setConfirmDialog, setNotification }) {
   const [values, setValues] = useState({
     fullName: "",
@@ -2772,23 +2793,25 @@ function Members({ state, setState, actor, setConfirmDialog, setNotification }) 
     const validatedValues = { ...values, fullName: normalizedFullName, email: normalizedEmail, mobile: normalizedMobile, username };
     const result = validate(memberSchema, validatedValues);
 
-    const duplicate = state.members.find((member) =>
-      (normalizedEmail && member.email === normalizedEmail)
+    const duplicateMember = state.members.find((member) =>
+      (normalizedFullName && member.fullName?.trim().toLowerCase() === normalizedFullName.toLowerCase())
+      || (normalizedEmail && member.email === normalizedEmail)
       || (normalizedMobile && member.mobile === normalizedMobile)
       || member.username?.toLowerCase() === username.toLowerCase()
     );
 
     const nextErrors = {
       ...result.errors,
-      ...(duplicate ? {
-        ...(normalizedEmail && duplicate.email === normalizedEmail ? { email: "Email already exists" } : {}),
-        ...(normalizedMobile && duplicate.mobile === normalizedMobile ? { mobile: "Mobile already exists" } : {}),
-        ...(duplicate.username?.toLowerCase() === username.toLowerCase() ? { username: "Username must be unique in this group" } : {})
+      ...(duplicateMember ? {
+        ...(normalizedFullName && duplicateMember.fullName?.trim().toLowerCase() === normalizedFullName.toLowerCase() ? { fullName: "Member full name already exists in this group" } : {}),
+        ...(normalizedEmail && duplicateMember.email === normalizedEmail ? { email: "Email already exists" } : {}),
+        ...(normalizedMobile && duplicateMember.mobile === normalizedMobile ? { mobile: "Mobile already exists" } : {}),
+        ...(duplicateMember.username?.toLowerCase() === username.toLowerCase() ? { username: "Username must be unique in this group" } : {})
       } : {})
     };
 
     setErrors(nextErrors);
-    if (!result.data || duplicate) return;
+    if (!result.data || duplicateMember) return;
 
     const hasGroupApprovers = getConfiguredApprovalRecipients(state).length > 0;
     const localMember = {
@@ -2910,6 +2933,53 @@ function Members({ state, setState, actor, setConfirmDialog, setNotification }) 
     }));
   }
 
+  async function handleDeleteMember(member) {
+    if (!member) return;
+    if (hasMemberGroupActivity(member, state)) {
+      setNotification({ type: "error", message: `${member.fullName} already has group activity, so it cannot be deleted.` });
+      setTimeout(() => setNotification(null), 4000);
+      return;
+    }
+
+    setConfirmDialog({
+      title: "Delete member",
+      message: `Delete ${member.fullName} from this group? This action cannot be undone.`,
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        if (!repository.isConfigured()) {
+          setNotification({ type: "error", message: "Cloud sync is not configured. Enable secure storage before deleting a member." });
+          setTimeout(() => setNotification(null), 4000);
+          return;
+        }
+
+        try {
+          await repository.deleteMember(member.id);
+          setState((current) => audit({
+            state: {
+              ...current,
+              members: current.members.filter((item) => String(item.id) !== String(member.id))
+            },
+            actor,
+            action: "delete",
+            tableName: "group_members",
+            recordId: member.id,
+            oldValue: member,
+            newValue: null
+          }));
+          setNotification({ type: "success", message: `${member.fullName} was deleted from the group.` });
+          setTimeout(() => setNotification(null), 4000);
+        } catch (error) {
+          console.error("Delete member failed", error);
+          setNotification({ type: "error", message: `Unable to delete member: ${error.message}` });
+          setTimeout(() => setNotification(null), 5000);
+        }
+      },
+      onCancel: () => {
+        setConfirmDialog(null);
+      }
+    });
+  }
+
   return (
     <Page title="Members" subtitle="Member master with unique mobile, email, username, nominee and bank readiness" action={null}>
       <FormCard title="Add member" onSubmit={submit}>
@@ -2920,9 +2990,10 @@ function Members({ state, setState, actor, setConfirmDialog, setNotification }) 
         <div className="section-note">Email and mobile are optional. If you want the member to login later, add their email and ask them to register with the same email.</div>
       </FormCard>
       <Table
-        headers={["Member", "Email", "Mobile", "Username", "Savings", "Loan", "Status"]}
+        headers={["Member", "Email", "Mobile", "Username", "Savings", "Loan", "Status", "Actions"]}
         rows={state.members.map((member) => {
           const summary = calculateMemberFinanceSummary(member, state, getDashboardPeriod(state), actor);
+          const canDelete = !hasMemberGroupActivity(member, state);
           return [
             member.fullName,
             member.email,
@@ -2930,7 +3001,14 @@ function Members({ state, setState, actor, setConfirmDialog, setNotification }) 
             member.username,
             currency.format(summary.savings),
             currency.format(summary.outstanding),
-            statusWithPendingApprover({ id: member.id, approvalStatus: member.approvalStatus ?? member.status }, state.approvals, "member_addition")
+            statusWithPendingApprover({ id: member.id, approvalStatus: member.approvalStatus ?? member.status }, state.approvals, "member_addition"),
+            canDelete ? (
+              <button type="button" className="secondary-button" onClick={() => handleDeleteMember(member)}>
+                Delete
+              </button>
+            ) : (
+              <span className="section-note">In use</span>
+            )
           ];
         })}
       />

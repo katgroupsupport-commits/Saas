@@ -759,6 +759,9 @@ function getLoanInterestPeriodEndDates(group, loanStartDate, asOfDate) {
     dueDates.push(new Date(cursor));
     cursor.setMonth(cursor.getMonth() + 1);
   }
+  if (dueDates.length === 0 && start <= end) {
+    dueDates.push(end);
+  }
   return dueDates;
 }
 
@@ -801,12 +804,14 @@ function calculateLoanInterestForPeriod({ loan, setup, group, periodStartDate, p
   const periodEnd = toDateOnly(periodEndDate);
   if (loanStartDate > periodEnd || Number(loan.principalOutstanding || 0) <= 0) return 0;
 
-  const interestStartDate = periodStartDate && toDateOnly(periodStartDate) > loanStartDate
-    ? toDateOnly(periodStartDate)
-    : loanStartDate;
-  const days = group.loanInterestStartMode === "fullMonth" && periodStartDate
-    ? 30
-    : Math.max(0, Math.ceil((periodEnd - interestStartDate) / (1000 * 60 * 60 * 24)));
+  const effectivePeriodStart = periodStartDate ? toDateOnly(periodStartDate) : loanStartDate;
+  const initialPeriodStart = loanStartDate;
+  const interestStartDate = effectivePeriodStart > initialPeriodStart ? effectivePeriodStart : initialPeriodStart;
+  const isFirstPeriod = !periodStartDate || effectivePeriodStart.getTime() === initialPeriodStart.getTime();
+  const isBeforeCurrentPeriod = loanStartDate < effectivePeriodStart;
+  const days = isFirstPeriod && !isBeforeCurrentPeriod
+    ? Math.max(0, Math.ceil((periodEnd - interestStartDate) / (1000 * 60 * 60 * 24)))
+    : 30;
   if (days <= 0) return 0;
 
   return calculateLoanInterest({

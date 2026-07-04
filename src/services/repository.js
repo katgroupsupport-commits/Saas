@@ -954,6 +954,21 @@ export const repository = {
     return mapMember(data, {}, setupRow ?? {});
   },
 
+  async deleteMember(memberId) {
+    const client = requireClient();
+    const profile = await currentProfile();
+    if (!profile) throw new Error("Not signed in.");
+
+    const { data, error } = await client
+      .from("members")
+      .delete()
+      .eq("member_id", memberId)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
   async ensurePeriod(period, groupId) {
     const client = requireClient();
     const profile = await currentProfile();
