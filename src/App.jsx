@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import {
   Bell,
@@ -273,8 +273,7 @@ function App() {
   const [notification, setNotification] = useState(null);
   const [showNotificationDetails, setShowNotificationDetails] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
-  const [showGroupSwitcher, setShowGroupSwitcher] = useState(false);
-  const [groupSwitchQuery, setGroupSwitchQuery] = useState("");
+  // group switcher popover removed for product owner; navigate to full page instead
   const [expandedMenu, setExpandedMenu] = useState("Dashboard");
 
   useEffect(() => {
@@ -558,8 +557,8 @@ function App() {
                 className="brand-switch"
                 onClick={() => {
                   if (isProductOwner) {
-                    setShowGroupSwitcher((open) => !open);
                     setMobileNavOpen(false);
+                    navigate("/select-group");
                     return;
                   }
                   setSelectedGroupId(null);
@@ -571,39 +570,7 @@ function App() {
               </button>
             </span>
             {selectedGroup?.code && <small>{selectedGroup.code}</small>}
-            {isProductOwner && showGroupSwitcher && (
-              <div className="group-switcher-popover">
-                <input
-                  value={groupSwitchQuery}
-                  onChange={(event) => setGroupSwitchQuery(event.target.value)}
-                  placeholder="Search group"
-                />
-                <div className="group-switcher-list">
-                  {state.groups
-                    .filter((group) => {
-                      const query = groupSwitchQuery.toLowerCase();
-                      return [group.name, group.code].some((field) => String(field).toLowerCase().includes(query));
-                    })
-                    .slice(0, 12)
-                    .map((group) => (
-                      <button
-                        type="button"
-                        key={group.id}
-                        onClick={() => {
-                          setSelectedGroupId(group.id);
-                          setShowGroupSwitcher(false);
-                          setGroupSwitchQuery("");
-                          setMobileNavOpen(false);
-                          navigate("/");
-                        }}
-                      >
-                        <strong>{group.name}</strong>
-                        <small>{group.code}</small>
-                      </button>
-                    ))}
-                </div>
-              </div>
-            )}
+            
           </div>
         </div>
 
@@ -2486,6 +2453,12 @@ function GroupSelectionPage({ state, setState, selectedGroupId, setSelectedGroup
   const hiddenGroupIds = new Set(getHiddenGroupIds(actor));
   const visibleGroups = (state.groups || []).filter((group) => !hiddenGroupIds.has(String(group.id)));
   const hiddenGroups = (state.groups || []).filter((group) => hiddenGroupIds.has(String(group.id)));
+  const [groupSearchQuery, setGroupSearchQuery] = useState("");
+  const filteredVisibleGroups = visibleGroups.filter((group) => {
+    const q = String(groupSearchQuery || "").toLowerCase();
+    if (!q) return true;
+    return [group.name, group.code].some((f) => String(f || "").toLowerCase().includes(q));
+  });
 
   function setGroupHidden(groupId, hidden) {
     const nextHiddenIds = new Set(getHiddenGroupIds(actor));
@@ -2689,8 +2662,11 @@ function GroupSelectionPage({ state, setState, selectedGroupId, setSelectedGroup
         </Section>
       ) : (
         <Section title="Your groups">
+          <div style={{ marginBottom: 12 }}>
+            <input placeholder="Search groups by name or code" value={groupSearchQuery} onChange={(e) => setGroupSearchQuery(e.target.value)} />
+          </div>
           <div className="data-grid">
-            {visibleGroups.map((group) => {
+            {filteredVisibleGroups.map((group) => {
               const creator = group.creatorName
                 || state.members.find((member) => String(member.groupId) === String(group.id) && member.memberRole === roles.GROUP_ADMIN)?.fullName
                 || group.primaryContactName
@@ -5304,8 +5280,8 @@ function Periods({ state, setState, actor, setConfirmDialog, setNotification }) 
 function Transactions({ state, setState, actor, setSelectedGroupId, setConfirmDialog, setNotification }) {
   const activeTransactionMembers = activeMembersForTransactions(state.members || []);
   const [values, setValues] = useState({
-    memberId: activeTransactionMembers[0]?.id ?? "",
-    amount: "",
+    memberId: "",
+    amount: 0,
     transactionDate: toIsoDateValue(),
     transactionType: "Savings Collection"
   });
@@ -5362,12 +5338,7 @@ function Transactions({ state, setState, actor, setSelectedGroupId, setConfirmDi
     setAllocationErrors({});
   }, [values.amount]);
 
-  useEffect(() => {
-    if (isGroupExpense) return;
-    if (!member || !isMemberActive(member)) {
-      setValues((current) => ({ ...current, memberId: activeTransactionMembers[0]?.id ?? "" }));
-    }
-  }, [isGroupExpense, member?.id, member?.status, member?.inactiveDate, activeTransactionMembers.length]);
+  // Keep member selection empty by default; user will choose or type to select.
 
   useEffect(() => {
     if (!isGroupExpense) return;
@@ -5726,7 +5697,7 @@ function Transactions({ state, setState, actor, setSelectedGroupId, setConfirmDi
               newValue: createdExpense
             }));
             setNotification({ type: "success", message: hasGroupApprovers ? "Group expense submitted for approval." : "Group expense saved." });
-            setValues({ memberId: activeTransactionMembers[0]?.id ?? "", amount: "", transactionDate: toIsoDateValue(), transactionType: "Savings Collection" });
+            setValues({ memberId: "", amount: 0, transactionDate: toIsoDateValue(), transactionType: "Savings Collection" });
             setExpenseLines([{ category: "Accessories", amount: "", remarks: "" }]);
             setEditableAllocation(null);
             setAllocationEditing(false);
@@ -5824,7 +5795,7 @@ function Transactions({ state, setState, actor, setSelectedGroupId, setConfirmDi
       });
 
           setNotification({ type: 'success', message: hasGroupApprovers ? 'Transaction submitted for approval.' : `Completed ${currency.format(result.data.amount)} for ${member.fullName}.` });
-          setValues({ memberId: activeTransactionMembers[0]?.id ?? "", amount: "", transactionDate: toIsoDateValue(), transactionType: "Savings Collection" });
+          setValues({ memberId: "", amount: 0, transactionDate: toIsoDateValue(), transactionType: "Savings Collection" });
           setEditableAllocation(null);
           setAllocationEditing(false);
           setAllocationErrors({});
@@ -5856,7 +5827,7 @@ function Transactions({ state, setState, actor, setSelectedGroupId, setConfirmDi
     <Page title="Transactions" subtitle="Savings, repayments, interest, penalty, deposits and withdrawals" action={null}>
       <FormCard title="Post collection" onSubmit={submit}>
         <div className="section-note">Open period: <strong>{openPeriod?.name ?? "No open period"}</strong></div>
-        <SelectField
+        <ComboField
           label="Member / Group expense"
           value={values.memberId}
           onChange={(value) => setValues({ ...values, memberId: value })}
@@ -8455,6 +8426,42 @@ function SelectField({ label, value, onChange, options, error, required = false 
           return <option key={item.value} value={item.value}>{item.label}</option>;
         })}
       </select>
+      {error && <small>{error}</small>}
+    </label>
+  );
+}
+
+function ComboField({ label, value, onChange, options = [], error, required = false, placeholder = "" }) {
+  const [inputText, setInputText] = useState("");
+  const optionsByLabel = useMemo(() => {
+    const map = new Map();
+    options.forEach((opt) => map.set(String(opt.label), opt.value));
+    return map;
+  }, [options]);
+
+  useEffect(() => {
+    const match = options.find((o) => String(o.value) === String(value));
+    setInputText(match ? match.label : "");
+  }, [value, options]);
+
+  function handleChange(ev) {
+    const txt = ev.target.value;
+    setInputText(txt);
+    const found = optionsByLabel.get(txt);
+    if (found !== undefined) onChange(found);
+    else onChange("");
+  }
+
+  const datalistId = `combo-${Math.random().toString(36).slice(2, 8)}`;
+  return (
+    <label className="field">
+      <span>{bilingual(label)}{required ? " *" : " (Optional)"}</span>
+      <input list={datalistId} value={inputText} placeholder={placeholder} onChange={handleChange} />
+      <datalist id={datalistId}>
+        {options.map((option) => (
+          <option key={option.value} value={option.label} />
+        ))}
+      </datalist>
       {error && <small>{error}</small>}
     </label>
   );
