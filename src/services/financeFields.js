@@ -653,8 +653,11 @@ export function calculateDerivedLoanPrincipalOutstanding(loan, state) {
     .filter((transaction) => !loanStartDate || String(transaction.transactionDate || "") >= String(loanStartDate))
     .filter((transaction) => !isMigratedOpeningTransaction(transaction))
     .reduce((sum, transaction) => sum + Number(transaction.allocation?.principal || 0), 0);
-  const originalAmount = Number(loan.amount || loan.principalOutstanding || 0);
-  if (principalPaid === 0) return Math.max(0, Number(loan.principalOutstanding || originalAmount || 0));
+  const originalAmount = Number(loan.amount ?? loan.principalOutstanding ?? 0);
+  if (principalPaid === 0) {
+    const principal = loan.principalOutstanding != null ? Number(loan.principalOutstanding) : originalAmount;
+    return Math.max(0, principal);
+  }
   return Math.max(0, originalAmount - principalPaid);
 }
 

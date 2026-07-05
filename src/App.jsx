@@ -769,7 +769,7 @@ function App() {
           <Route path="/reversals" element={<Reversals state={viewState} setState={patchState} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
           <Route path="/audit-history" element={<Reports state={viewState} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
           <Route path="/loans" element={<Loans state={visibleViewState} setState={patchState} actor={{ ...state.session.user, role }} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
-          <Route path="/operations/loans" element={<Loans state={visibleViewState} setState={patchState} actor={{ ...state.session.user, role }} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
+          <Route path="/operations/loans" element={<Loans state={visibleViewState} setState={patchState} actor={{ ...state.session.user, role }} setConfirmDialog={setConfirmDialog} setNotification={setNotification} ensureLatestTenantData={ensureLatestTenantData} />} />
           <Route path="/approvals" element={<Approvals state={viewState} setState={patchState} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
           <Route path="/reports" element={<Reports state={viewState} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
           <Route path="/contact-support" element={<ContactSupport state={viewState} setState={patchState} actor={state.session.user} setNotification={setNotification} />} />
@@ -6327,9 +6327,9 @@ function Corrections({ state, setState, actor, setConfirmDialog, setNotification
 function Reversals({ state, setState, actor, setConfirmDialog, setNotification }) {
   const activeGroupId = state.groups?.[0]?.id;
   const activeMemberIds = new Set((state.members || []).map((member) => String(member.id)));
-  const belongsToActiveGroup = (transaction) =>
-    String(transaction.groupId ?? "") === String(activeGroupId)
-    || activeMemberIds.has(String(transaction.memberId));
+  const belongsToActiveGroup = (item) =>
+    String(item.groupId ?? "") === String(activeGroupId)
+    || activeMemberIds.has(String(item.memberId));
   const reversibleTransactions = state.transactions.filter((item) =>
     belongsToActiveGroup(item)
     && isCompletedFinancialStatus(item.approvalStatus)
@@ -6339,8 +6339,16 @@ function Reversals({ state, setState, actor, setConfirmDialog, setNotification }
     && !item.transactionNumber?.startsWith("ADJ")
     && correctionBlockReason(state.transactions, item, "reversal") === ""
   );
+  const reversibleLoans = (state.loans || []).filter((loan) =>
+    belongsToActiveGroup(loan)
+    && isOutstandingLoan(loan)
+  );
+  const reversibleItems = [
+    ...reversibleTransactions.map((item) => ({ ...item, itemType: "transaction", key: `transaction:${item.id}` })),
+    ...reversibleLoans.map((loan) => ({ ...loan, itemType: "loan", key: `loan:${loan.id}` }))
+  ];
   const [values, setValues] = useState({
-    transactionId: reversibleTransactions[0]?.id ?? "",
+    itemKey: reversibleItems[0]?.key ?? "",
     reversalDate: toIsoDateValue(),
     reason: ""
   });
@@ -6348,30 +6356,58 @@ function Reversals({ state, setState, actor, setConfirmDialog, setNotification }
   const reversalRows = state.transactions
     .filter((item) => item.reversedFlag === "Y" || item.transactionNumber?.startsWith("REV"))
     .filter((item) => isPendingOrRecentCompleted(item, "transactionDate", 60));
-  const selectedTransaction = reversibleTransactions.find((item) => String(item.id) === String(values.transactionId));
-  const selectedMember = state.members.find((item) => String(item.id) === String(selectedTransaction?.memberId));
-  const blockedOriginal = state.transactions.find((item) => String(item.id) === String(values.transactionId));
-  const selectedBlockReason = correctionBlockReason(state.transactions, blockedOriginal, "reversal");
+  const selectedItem = reversibleItems.find((item) => item.key === values.itemKey);
+  const selectedMember = state.members.find((item) => String(item.id) === String(selectedItem?.memberId));
+  const blockedOriginal = selectedItem?.itemType === "transaction"
+    ? state.transactions.find((item) => String(item.id) === String(selectedItem.id))
+    : null;
+  const selectedBlockReason = selectedItem?.itemType === "transaction"
+    ? correctionBlockReason(state.transactions, blockedOriginal, "reversal")
+    : "";
+  const selectedTransaction = selectedItem?.itemType === "transaction" ? selectedItem : null;
 
   function submit(event) {
     event.preventDefault();
     const nextErrors = {};
-    if (!selectedTransaction) nextErrors.transactionId = "Select the wrong transaction.";
-    if (selectedBlockReason) nextErrors.transactionId = selectedBlockReason;
-    if (selectedMember && !isMemberActive(selectedMember)) nextErrors.transactionId = "Inactive members cannot have new reversal transactions.";
+    if (!selectedItem) nextErrors.itemKey = "Select the wrong transaction or loan.";
+    if (selectedBlockReason) nextErrors.itemKey = selectedBlockReason;
+    if (selectedMember && !isMemberActive(selectedMember)) nextErrors.itemKey = "Inactive members cannot have new reversal transactions.";
     if (!values.reason.trim()) nextErrors.reason = "Add a reason for audit history.";
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
 
+    const reversalTitle = selectedItem?.itemType === "loan" ? "Reverse loan" : "Create reversal";
+    const reversalMessage = selectedItem?.itemType === "loan"
+      ? `Reverse the active loan ${selectedItem.loanNumber ?? selectedItem.id}?`
+      : `Reverse the full transaction ${selectedItem.transactionNumber ?? selectedItem.id}?`;
+
     setConfirmDialog({
-      title: "Create reversal",
-      message: `Reverse the full transaction ${selectedTransaction.transactionNumber ?? selectedTransaction.id}?`,
+      title: reversalTitle,
+      message: reversalMessage,
       onConfirm: async () => {
         setConfirmDialog(null);
         try {
+          if (selectedItem?.itemType === "loan") {
+            setState((current) => audit({
+              state: {
+                ...current,
+                loans: (current.loans || []).filter((loan) => String(loan.id) !== String(selectedItem.id))
+              },
+              actor,
+              action: "reverse",
+              tableName: "loan_master",
+              recordId: selectedItem.id,
+              newValue: { ...selectedItem, status: "REVERSED", principalOutstanding: 0, interestOutstanding: 0, penaltyOutstanding: 0 }
+            }));
+            setNotification({ type: "success", message: "Loan reversed and removed from active loans." });
+            setValues((current) => ({ ...current, reason: "" }));
+            setTimeout(() => setNotification(null), 3000);
+            return;
+          }
+
           const hasGroupApprovers = getApprovalRecipients(state).length > 0;
           const created = await repository.reverseTransaction({
-            ...selectedTransaction,
+            ...selectedItem,
             transactionDate: values.reversalDate,
             approvalStatus: hasGroupApprovers ? "Pending" : "Completed",
             remarks: values.reason.trim()
@@ -6381,7 +6417,7 @@ function Reversals({ state, setState, actor, setConfirmDialog, setNotification }
                 state,
                 action: "Transaction reversal",
                 requester: actor.name,
-                amount: Math.abs(Number(selectedTransaction.amount || 0)),
+                amount: Math.abs(Number(selectedItem.amount || 0)),
                 referenceId: created.id,
                 referenceType: "transaction"
               })
@@ -6423,20 +6459,23 @@ function Reversals({ state, setState, actor, setConfirmDialog, setNotification }
       <div className="two-column">
         <FormCard title="New reversal" onSubmit={submit}>
           <SelectField
-            label="Wrong transaction"
-            value={values.transactionId}
-            onChange={(transactionId) => {
-              setValues({ ...values, transactionId });
+            label="Wrong transaction or loan"
+            value={values.itemKey}
+            onChange={(itemKey) => {
+              setValues({ ...values, itemKey });
               setErrors({});
             }}
-            options={reversibleTransactions.map((item) => {
+            options={reversibleItems.map((item) => {
               const member = state.members.find((entry) => String(entry.id) === String(item.memberId));
+              const label = item.itemType === "loan"
+                ? `${item.startDate ?? ""} / ${member?.fullName ?? item.memberName ?? "Member"} / Loan ${currency.format(item.amount)} / ${item.loanNumber ?? item.id}`
+                : `${item.transactionDate} / ${member?.fullName ?? "Member"} / ${currency.format(item.amount)} / ${item.transactionNumber ?? item.id}`;
               return {
-                label: `${item.transactionDate} / ${member?.fullName ?? "Member"} / ${currency.format(item.amount)} / ${item.transactionNumber ?? item.id}`,
-                value: item.id
+                label,
+                value: item.key
               };
             })}
-            error={errors.transactionId}
+            error={errors.itemKey}
           />
           <Field label="Reversal date" type="date" value={values.reversalDate} onChange={(reversalDate) => setValues({ ...values, reversalDate })} />
           <Field label="Reason" value={values.reason} onChange={(reason) => setValues({ ...values, reason })} error={errors.reason} />
@@ -6445,21 +6484,21 @@ function Reversals({ state, setState, actor, setConfirmDialog, setNotification }
           <div className="status-row">
             <div>
               <strong>Original amount</strong>
-              <p>{currency.format(selectedTransaction?.amount ?? 0)}</p>
+              <p>{currency.format(selectedItem?.amount ?? 0)}</p>
             </div>
             <div>
               <strong>Reversal entry</strong>
-              <p>{currency.format(-Math.abs(Number(selectedTransaction?.amount ?? 0)))}</p>
+              <p>{currency.format(-Math.abs(Number(selectedItem?.amount ?? 0)))}</p>
             </div>
           </div>
           <div className="status-row">
             <div>
               <strong>Member</strong>
-              <p>{selectedMember?.fullName ?? "Select transaction"}</p>
+              <p>{selectedMember?.fullName ?? selectedItem?.memberName ?? "Select transaction"}</p>
             </div>
             <div>
               <strong>Parent transaction</strong>
-              <p>{selectedTransaction?.transactionNumber ?? selectedTransaction?.id ?? "-"}</p>
+              <p>{selectedItem?.itemType === "loan" ? selectedItem.loanNumber ?? selectedItem.id : selectedItem?.transactionNumber ?? selectedItem?.id ?? "-"}</p>
             </div>
           </div>
           <p className="section-note">Use reversal only when the whole transaction is wrong, such as wrong member or duplicate posting.</p>
@@ -7355,8 +7394,8 @@ function Withdrawals({ state, setState, actor, setConfirmDialog, setNotification
   );
 }
 
-function Loans({ state, setState, actor, setConfirmDialog, setNotification }) {
-  useEffect(() => { ensureLatestTenantData(); }, []);
+function Loans({ state, setState, actor, setConfirmDialog, setNotification, ensureLatestTenantData }) {
+  useEffect(() => { ensureLatestTenantData(); }, [ensureLatestTenantData]);
   const requesterMember = getCurrentMember(state, actor);
   const memberOnlyRequest = !isGroupAdminActor(state, actor);
   const activeLoanMembers = memberOnlyRequest && requesterMember
@@ -7381,7 +7420,7 @@ function Loans({ state, setState, actor, setConfirmDialog, setNotification }) {
       setValues((current) => ({ ...current, memberId: requesterMember.id }));
     }
     if (!memberOnlyRequest && (!selectedMember || !isMemberActive(selectedMember))) {
-      setValues((current) => ({ ...current, memberId: activeWithdrawalMembers[0]?.id ?? "" }));
+      setValues((current) => ({ ...current, memberId: activeLoanMembers[0]?.id ?? "" }));
     }
   }, [memberOnlyRequest, requesterMember?.id, values.memberId]);
 
