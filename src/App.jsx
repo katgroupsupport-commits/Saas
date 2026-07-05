@@ -5354,6 +5354,13 @@ function Transactions({ state, setState, actor, setSelectedGroupId, setConfirmDi
     setAllocationErrors({});
   }, [values.amount]);
 
+  // When member changes, reset editable allocation so splits and interest recalc
+  useEffect(() => {
+    setEditableAllocation(null);
+    setAllocationEditing(false);
+    setAllocationErrors({});
+  }, [values.memberId]);
+
   // Keep member selection empty by default; user will choose or type to select.
 
   useEffect(() => {
@@ -8465,16 +8472,36 @@ function ComboField({ label, value, onChange, options = [], error, required = fa
   function handleChange(ev) {
     const txt = ev.target.value;
     setInputText(txt);
-    const found = optionsByLabel.get(txt);
-    if (found !== undefined) onChange(found);
+    // Do not immediately clear selection while typing; keep textual input.
+  }
+
+  function commitSelection(txt) {
+    if (!txt) {
+      onChange("");
+      return;
+    }
+    const q = String(txt).toLowerCase();
+    const found = options.find((o) => String(o.label).toLowerCase().includes(q) || String(o.code || "").toLowerCase().includes(q));
+    if (found) onChange(found.value);
     else onChange("");
+  }
+
+  function handleBlur() {
+    commitSelection(inputText);
+  }
+
+  function handleKeyDown(e) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      commitSelection(inputText);
+    }
   }
 
   const datalistId = `combo-${Math.random().toString(36).slice(2, 8)}`;
   return (
     <label className="field">
       <span>{bilingual(label)}{required ? " *" : " (Optional)"}</span>
-      <input list={datalistId} value={inputText} placeholder={placeholder} onChange={handleChange} />
+      <input list={datalistId} value={inputText} placeholder={placeholder} onChange={handleChange} onBlur={handleBlur} onKeyDown={handleKeyDown} />
       <datalist id={datalistId}>
         {options.map((option) => (
           <option key={option.value} value={option.label} />
