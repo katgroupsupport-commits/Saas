@@ -213,11 +213,14 @@ export function calculatePeriodShareDistribution({ members = [], transactions = 
 }
 
 function isActiveMemberOnDate(member, date) {
-  const joined = parseDate(member.dateJoined ?? member.joinDate ?? member.createdAt);
   const exit = parseDate(member.exitDate ?? member.inactiveDate);
+  if (member.active === false) return false;
   if (member.status === "Inactive" && exit && exit < date) return false;
-  if (joined && joined > date) return false;
   return !exit || exit >= date;
+}
+
+function isEligibleForShareOnDate(member, date) {
+  return isActiveMemberOnDate(member, date);
 }
 
 function shareMovementAmount(transaction) {
@@ -231,13 +234,20 @@ function shareMovementAmount(transaction) {
   return Number(allocation.savings || 0) + Number(allocation.excess || 0);
 }
 
-function memberShareAtDate(member, transactions, targetDate) {
+function memberShareAtDate(member, transactions, targetDate, { periodStart = null, periodEnd = null } = {}) {
   const target = dateOnly(targetDate);
   const amount = transactions
     .filter((transaction) => String(transaction.memberId) === String(member.id))
     .filter((transaction) => {
       const date = parseDate(transaction.transactionDate);
-      return date && dateOnly(date) <= target;
+      if (!date) return false;
+      const trxDate = dateOnly(date);
+      if (periodStart || periodEnd) {
+        const rangeStart = dateOnly(parseDate(periodStart) ?? target);
+        const rangeEnd = dateOnly(parseDate(periodEnd) ?? target);
+        return trxDate >= rangeStart && trxDate <= rangeEnd;
+      }
+      return trxDate <= target;
     })
     .reduce((sum, transaction) => sum + shareMovementAmount(transaction), 0);
   return amount !== 0 ? Math.max(0, amount) : Math.max(0, Number(member.savings || 0));
@@ -278,23 +288,38 @@ function weightedLoanShare({ member, loanDate, interestDate, eligibleBase, trans
 }
 
 function allocatePoolByWeights(rows, amount) {
-  const totalWeight = rows.reduce((sum, row) => sum + Number(row.shareWeight || 0), 0);
-  let remaining = Math.round(Number(amount || 0));
-  return rows.map((row, index) => {
-    const shareAmount = totalWeight > 0
-      ? (index === rows.length - 1 ? remaining : Math.round((row.shareWeight / totalWeight) * Number(amount || 0)))
-      : 0;
-    remaining -= shareAmount;
-    return {
-      ...row,
-      shareAmount,
-      sharePercent: totalWeight > 0 ? Number(((row.shareWeight / totalWeight) * 100).toFixed(2)) : 0
-    };
-  });
+  const normalizedAmount = Math.round(Number(amount || 0));
+
+  if (!rows.length) return [];
+
+  const baseShare = Math.floor(normalizedAmount / rows.length);
+  const remainder = normalizedAmount % rows.length;
+
+  return rows.map((row, index) => ({
+    ...row,
+    shareAmount: baseShare + (index < remainder ? 1 : 0),
+    sharePercent: Number((100 / rows.length).toFixed(2))
+  }));
 }
 
 function activeMembersOn(members, date) {
-  return members.filter((member) => isActiveMemberOnDate(member, date));
+  return members.filter((member) => isEligibleForShareOnDate(member, date));
+}
+
+function transactionsForShareDistribution(transactions = []) {
+  const allTransactions = Array.isArray(transactions) ? transactions : [];
+  const reversedParentIds = new Set(
+    allTransactions
+      .filter((transaction) => String(transaction.parentTransactionId || "").trim())
+      .filter((transaction) => String(transaction.reversedFlag || "").toUpperCase() === "Y" || String(transaction.transactionNumber || "").startsWith("REV"))
+      .map((transaction) => String(transaction.parentTransactionId))
+  );
+
+  return allTransactions.filter((transaction) => {
+    if (String(transaction.reversedFlag || "").toUpperCase() === "Y") return false;
+    if (reversedParentIds.has(String(transaction.id))) return false;
+    return true;
+  });
 }
 
 export function calculateEventBasedShareDistribution({ members = [], transactions = [], loans = [], period, referenceDate = new Date() }) {
@@ -302,9 +327,23 @@ export function calculateEventBasedShareDistribution({ members = [], transaction
 
   const periodStart = dateOnly(parseDate(period.startDate) ?? referenceDate);
   const periodEnd = dateOnly(parseDate(period.endDate) ?? referenceDate);
-  const completedTransactions = transactions.filter((transaction) =>
-    ["COMPLETED", "APPROVED"].includes(String(transaction.approvalStatus ?? "").toUpperCase())
-  );
+  const completedTransactions = transactions.filter((transaction) => {
+    const status = String(transaction.approvalStatus ?? transaction.approval_status ?? "").toUpperCase();
+    return ["COMPLETED", "APPROVED"].includes(status);
+  });
+  const effectiveTransactions = transactionsForShareDistribution(completedTransactions);
+
+  console.log(`[ShareDistribution] Period: ${period.name} (${periodStart.toISOString().split('T')[0]} to ${periodEnd.toISOString().split('T')[0]})`);
+  console.log(`[ShareDistribution] Input transactions: ${transactions.length}, Completed: ${completedTransactions.length}, Effective: ${effectiveTransactions.length}`);
+  
+  const relevantTransactions = effectiveTransactions.filter((transaction) => {
+    const date = parseDate(transaction.transactionDate);
+    return date && dateOnly(date) >= periodStart && dateOnly(date) <= periodEnd;
+  });
+  console.log(`[ShareDistribution] Transactions in period: ${relevantTransactions.length}`);
+  relevantTransactions.forEach(t => {
+    console.log(`  - ${t.transactionType}: ${t.amount}, allocation.interest: ${t.allocation?.interest}, date: ${t.transactionDate}`);
+  });
 
   const resultByMember = Object.fromEntries(members.map((member) => [member.id, {
     memberId: member.id,
@@ -319,7 +358,7 @@ export function calculateEventBasedShareDistribution({ members = [], transaction
     equalShare: 0
   }]));
 
-  completedTransactions
+  effectiveTransactions
     .filter((transaction) => {
       const date = parseDate(transaction.transactionDate);
       return date && dateOnly(date) >= periodStart && dateOnly(date) <= periodEnd;
@@ -327,31 +366,53 @@ export function calculateEventBasedShareDistribution({ members = [], transaction
     .forEach((transaction) => {
       const trxDate = dateOnly(parseDate(transaction.transactionDate));
       const isMigratedOpening = transaction.transactionType === "Migrated";
-      const interestAmount = isMigratedOpening ? 0 : Number(transaction.allocation?.interest || 0);
-      const equalPool = isMigratedOpening ? 0 : Number(transaction.allocation?.penalty || 0) + Number(transaction.allocation?.excess || 0);
+      // For Interest Collection type, if allocation.interest is 0, use the full amount
+      let interestAmount = isMigratedOpening ? 0 : Number(transaction.allocation?.interest || 0);
+      if (!isMigratedOpening && transaction.transactionType === "Interest Collection" && interestAmount === 0) {
+        interestAmount = Number(transaction.amount || 0);
+      }
+      let equalPool = isMigratedOpening ? 0 : Number(transaction.allocation?.penalty || 0) + Number(transaction.allocation?.excess || 0);
+      // For Penalty Collection type, if allocation.penalty is 0, use the full amount
+      if (!isMigratedOpening && transaction.transactionType === "Penalty Collection" && equalPool === 0) {
+        equalPool = Number(transaction.amount || 0);
+      }
 
       if (interestAmount > 0) {
+        console.log(`[ShareDistribution] Processing interest ${interestAmount} from borrower ${transaction.memberId}`);
         const borrowerLoans = loans
           .filter((loan) => String(loan.memberId) === String(transaction.memberId))
           .filter((loan) => parseDate(loan.startDate ?? loan.distributionDate) && dateOnly(parseDate(loan.startDate ?? loan.distributionDate)) <= trxDate)
           .sort((a, b) => parseDate(a.startDate ?? a.distributionDate) - parseDate(b.startDate ?? b.distributionDate));
+        console.log(`[ShareDistribution]   Total loans for borrower ${transaction.memberId}: ${loans.filter((loan) => String(loan.memberId) === String(transaction.memberId)).length}, Filtered: ${borrowerLoans.length}`);
         const loan = borrowerLoans[0];
-        const loanDate = dateOnly(parseDate(loan?.startDate ?? loan?.distributionDate) ?? trxDate);
-        const eligibleMembers = members.filter((member) => isActiveMemberOnDate(member, loanDate));
+        console.log(`[ShareDistribution]   Transaction date: ${trxDate.toISOString().split('T')[0]}, Has loan: ${!!loan}`);
+        const eligibleMembers = members.filter((member) => isEligibleForShareOnDate(member, trxDate));
+        console.log(`[ShareDistribution]   All members: ${members.length}, Eligible for share on date: ${eligibleMembers.length}`);
+        if (eligibleMembers.length === 0) {
+          console.log(`[ShareDistribution]   WARNING: No eligible members found. All members on ${loanDate.toISOString().split('T')[0]}:`);
+          members.forEach(m => {
+            const joined = parseDate(m.dateJoined ?? m.joinDate ?? m.createdAt);
+            const exit = parseDate(m.exitDate ?? m.inactiveDate);
+            console.log(`     - ${m.fullName}: status=${m.status}, joined=${joined?.toISOString().split('T')[0]}, exit=${exit?.toISOString().split('T')[0]}`);
+          });
+        }
         const weightedRows = eligibleMembers.map((member) => {
-          const eligibleBase = memberShareAtDate(member, completedTransactions, loanDate);
+          console.log(`[ShareDistribution]     Member ${member.fullName}: sharing equally`);
           return {
             member,
             memberId: member.id,
             memberName: member.fullName,
-            savingAmount: eligibleBase,
-            daysActive: Math.max(1, Math.round((trxDate - loanDate) / (1000 * 60 * 60 * 24))),
-            shareWeight: weightedLoanShare({ member, loanDate, interestDate: trxDate, eligibleBase, transactions: completedTransactions })
+            savingAmount: Number(member.savings || 0),
+            daysActive: 1,
+            shareWeight: 1
           };
-        }).filter((row) => row.shareWeight > 0);
+        });
+
+        console.log(`[ShareDistribution]   Members with weight > 0: ${weightedRows.length}`);
 
         allocatePoolByWeights(weightedRows, interestAmount).forEach((row) => {
           if (!resultByMember[row.memberId]) return;
+          console.log(`[ShareDistribution]   Allocated ${row.shareAmount} to ${row.memberName}`);
           resultByMember[row.memberId].shareAmount += row.shareAmount;
           resultByMember[row.memberId].interestShare += row.shareAmount;
           resultByMember[row.memberId].shareWeight += row.shareWeight;
@@ -368,7 +429,7 @@ export function calculateEventBasedShareDistribution({ members = [], transaction
             memberName: member.fullName,
             savingAmount: memberShareAtDate(member, completedTransactions, trxDate),
             daysActive: 1,
-            shareWeight: memberShareAtDate(member, completedTransactions, trxDate)
+            shareWeight: 1
           }))
           .filter((row) => row.shareWeight > 0);
         allocatePoolByWeights(weightedRows, equalPool).forEach((row) => {

@@ -233,7 +233,6 @@ function buildSidebarSections(menu, role) {
     {
       label: "Corrections",
       children: adminLike ? [
-        { path: "/corrections/adjustments", label: "Adjustments" },
         { path: "/corrections/reversals", label: "Reversals" },
         { path: "/corrections/waivers", label: "Waivers" }
       ] : []
@@ -419,6 +418,21 @@ function App() {
       active = false;
     };
   }, []);
+
+  async function ensureLatestTenantData() {
+    if (!repository.isConfigured()) return;
+    try {
+      const tenantData = await repository.listTenantData();
+      if (!tenantData) return;
+      const keysToCheck = ["groups", "members", "periods", "loans", "transactions", "approvals", "expenses"];
+      const stale = keysToCheck.some((k) => (Array.isArray(tenantData[k]) ? tenantData[k].length : 0) !== (Array.isArray(state[k]) ? state[k].length : 0));
+      if (stale) {
+        setState((current) => ({ ...tenantData, session: { signedIn: true, user: current.session?.user ?? {} } }));
+      }
+    } catch (err) {
+      console.warn('Tenant refresh failed', err);
+    }
+  }
 
   useEffect(() => {
     const checkPeriodTransition = () => {
@@ -738,7 +752,7 @@ function App() {
           <Route path="/notifications" element={<MemberNotifications state={visibleViewState} actor={{ ...state.session.user, role }} setState={patchState} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
           <Route path="/profile" element={<MemberProfile state={viewState} setState={patchState} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
           <Route path="/members" element={<Members state={viewState} setState={patchState} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
-          <Route path="/setup" element={<SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} />} />
+          <Route path="/setup" element={<SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} ensureLatestTenantData={ensureLatestTenantData} />} />
           <Route path="/subscriptions" element={<Subscriptions state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
           <Route path="/periods" element={<Periods state={viewState} setState={patchState} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
           <Route path="/transactions" element={<Transactions state={viewState} setState={patchState} actor={state.session.user} setSelectedGroupId={setSelectedGroupId} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
@@ -761,15 +775,15 @@ function App() {
           <Route path="/contact-support" element={<ContactSupport state={viewState} setState={patchState} actor={state.session.user} setNotification={setNotification} />} />
           <Route path="/product-owner" element={<ProductOwnerSupport state={state} setState={patchState} selectedGroupId={selectedGroupId} setSelectedGroupId={setSelectedGroupId} setNotification={setNotification} />} />
           <Route path="/settings" element={<SettingsPage state={viewState} setState={patchState} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
-          <Route path="/setup/group" element={<SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="group" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} />} />
-          <Route path="/setup/member" element={<SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="member" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} />} />
-          <Route path="/setup/financial" element={<SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="financial" initialFinancialTab="approvers" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} />} />
-          <Route path="/setup/approval" element={<SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="financial" initialFinancialTab="approvers" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} />} />
-          <Route path="/setup/loan" element={<SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="financial" initialFinancialTab="loan" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} />} />
-          <Route path="/setup/periods" element={<SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="financial" initialFinancialTab="period" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} />} />
-          <Route path="/setup/roles" element={<SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="financial" initialFinancialTab="roles" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} />} />
-          <Route path="/setup/calculator" element={<SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="financial" initialFinancialTab="calculator" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} />} />
-          <Route path="/setup/legacy" element={<SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="financial" initialFinancialTab="calculator" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} />} />
+          <Route path="/setup/group" element={<SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="group" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} ensureLatestTenantData={ensureLatestTenantData} />} />
+          <Route path="/setup/member" element={<SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="member" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} ensureLatestTenantData={ensureLatestTenantData} />} />
+          <Route path="/setup/financial" element={<SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="financial" initialFinancialTab="approvers" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} ensureLatestTenantData={ensureLatestTenantData} />} />
+          <Route path="/setup/approval" element={<SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="financial" initialFinancialTab="approvers" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} ensureLatestTenantData={ensureLatestTenantData} />} />
+          <Route path="/setup/loan" element={<SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="financial" initialFinancialTab="loan" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} ensureLatestTenantData={ensureLatestTenantData} />} />
+          <Route path="/setup/periods" element={<SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="financial" initialFinancialTab="period" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} ensureLatestTenantData={ensureLatestTenantData} />} />
+          <Route path="/setup/roles" element={<SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="financial" initialFinancialTab="roles" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} ensureLatestTenantData={ensureLatestTenantData} />} />
+          <Route path="/setup/calculator" element={<SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="financial" initialFinancialTab="calculator" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} ensureLatestTenantData={ensureLatestTenantData} />} />
+          <Route path="/setup/legacy" element={<SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="financial" initialFinancialTab="calculator" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} ensureLatestTenantData={ensureLatestTenantData} />} />
           <Route path="/guide" element={<GuidePage insideApp />} />
           <Route path="*" element={<Dashboard role={role} state={viewState} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
         </Routes>
@@ -1834,22 +1848,11 @@ function Dashboard({ role, state, actor, forceGroupView = false, memberPortal = 
         )}
         <MetricGrid
           metrics={[
-            metric(memberCards.savings.label, currency.format(memberCards.savings.header ?? 0), Users, [
-              `Savings before withdrawals: ${currency.format(memberCards.savings.subfields.savingsBeforeWithdrawals ?? 0)}`,
-              `Withdrawn savings: ${currency.format(memberCards.savings.subfields.withdrawnSavings ?? 0)}`,
-              `This period savings: ${currency.format(memberCards.savings.subfields.thisPeriodSavings ?? 0)}`
-            ]),
-            metric(memberCards.collectedInPeriod.label, currency.format(memberCards.collectedInPeriod.header ?? 0), WalletCards, [
-              `Savings collected: ${currency.format(memberCards.collectedInPeriod.subfields.savingsCollected ?? 0)}`,
-              `Principal collected: ${currency.format(memberCards.collectedInPeriod.subfields.principalCollected ?? 0)}`,
-              `Interest collected: ${currency.format(memberCards.collectedInPeriod.subfields.interestCollected ?? 0)}`,
-              `Penalty collected: ${currency.format(memberCards.collectedInPeriod.subfields.penaltyCollected ?? 0)}`,
-              `Withdrawn in period: ${currency.format(memberCards.collectedInPeriod.subfields.withdrawnInPeriod ?? 0)}`
-            ]),
             metric(memberCards.shareAmount.label, currency.format(memberCards.shareAmount.header ?? 0), WalletCards, [
               `Savings: ${currency.format(memberCards.shareAmount.subfields.savings ?? 0)}`,
               `Income/Gain share: ${currency.format(memberCards.shareAmount.subfields.incomeGainShare ?? 0)}`,
-              `Expense share: ${currency.format(memberCards.shareAmount.subfields.expenseShare ?? 0)}`
+              `Expense share: ${currency.format(memberCards.shareAmount.subfields.expenseShare ?? 0)}`,
+              `Share percent: ${memberCards.sharePercent.header ?? 0}%`
             ]),
             metric(memberCards.loanBalance.label, currency.format(memberCards.loanBalance.header ?? 0), IndianRupee, [
               `Active loans: ${memberCards.loanBalance.subfields.activeLoans ?? 0}`,
@@ -1857,32 +1860,46 @@ function Dashboard({ role, state, actor, forceGroupView = false, memberPortal = 
               `Interest pending: ${currency.format(memberCards.loanBalance.subfields.interestPending ?? 0)}`,
               `Penalty pending: ${currency.format(memberCards.loanBalance.subfields.penaltyPending ?? 0)}`,
               `Disbursed till now: ${currency.format(memberCards.loanBalance.subfields.disbursedTillNow ?? 0)}`
-            ]),
-            metric(memberCards.nextMinimumDue.label, currency.format(memberCards.nextMinimumDue.header ?? 0), CalendarCheck, [
-              `Saving due: ${currency.format(memberCards.nextMinimumDue.subfields.savingDue ?? 0)}`,
-              `Principal due: ${currency.format(memberCards.nextMinimumDue.subfields.principalDue ?? 0)}`,
-              `Interest due: ${currency.format(memberCards.nextMinimumDue.subfields.interestDue ?? 0)}`,
-              `Penalty due: ${currency.format(memberCards.nextMinimumDue.subfields.penaltyDue ?? 0)}`,
-              `Due: ${memberCards.nextMinimumDue.subfields.dueDate?.toLocaleDateString("en-IN", { year: "numeric", month: "long", day: "numeric" }) ?? "-"}`
-            ]),
-            metric(memberCards.sharePercent.label, `${memberCards.sharePercent.header ?? 0}%`, WalletCards, [
-              `Member share amount: ${currency.format(memberCards.sharePercent.subfields.memberShareAmount ?? 0)}`,
-              `Total group share: ${currency.format(memberCards.sharePercent.subfields.totalGroupShare ?? 0)}`
             ])
           ]}
         />
-        <Section title="Next payment">
+        <Section title="Loan and EMI details">
           <div className="status-row">
             <div>
-              <strong>Next minimum due</strong>
-              <p>{currency.format(memberSummary.nextDueAmount)}</p>
+              <strong>Next EMI amount</strong>
+              <p>{currency.format(nextEmiRow?.totalDue ?? memberSummary.nextDueAmount)}</p>
             </div>
             <div>
-              <strong>Due date</strong>
-              <p>{memberSummary.dueDate.toLocaleDateString("en-IN", { year: "numeric", month: "long", day: "numeric" })}</p>
+              <strong>EMI date</strong>
+              <p>{formatDate(nextEmiRow?.dueDate ?? memberSummary.dueDate)}</p>
+            </div>
+            <div>
+              <strong>Interest due</strong>
+              <p>{currency.format(memberSummary.interestDue || openingInterestDue)}</p>
+            </div>
+            <div>
+              <strong>Principal due</strong>
+              <p>{currency.format(sortedDueRows.reduce((sum, row) => sum + Number(row.principalDue ?? (row.outstandingPrincipal || 0)), 0))}</p>
+            </div>
+            <div>
+              <strong>Penalty due</strong>
+              <p>{currency.format(sortedDueRows.reduce((sum, row) => sum + Number(row.penaltyDue || 0), 0) || openingPenaltyDue)}</p>
             </div>
           </div>
-          <p className="section-note">Amount includes saving due, tenure-based principal due, interest till next month, and any charges.</p>
+          <Table
+            headers={["Loan amount", "Start date", "Principal outstanding", "Principal due", "Interest due", "Penalty due", "Total outstanding", "Rate", "Status"]}
+            rows={memberSummary.memberActiveLoans.map((loan) => [
+              currency.format(loan.amount || 0),
+              formatDate(loanDate(loan)),
+              currency.format(calculateDerivedLoanPrincipalOutstanding(loan, state)),
+              currency.format(Math.max(0, Number(loan.principalOutstanding || 0))),
+              currency.format(loan.interestOutstanding || 0),
+              currency.format(loan.penaltyOutstanding || 0),
+              currency.format(calculateLoanOutstandingWithDues(loan, state)),
+              `${Number(loan.rate || effectiveSetup.interestRate || 0)}%`,
+              loan.loanStatus || loan.status || loan.approvalStatus || "Active"
+            ])}
+          />
         </Section>
         <Section title="Member details">
           <div className="status-row">
@@ -1920,61 +1937,6 @@ function Dashboard({ role, state, actor, forceGroupView = false, memberPortal = 
             </div>
           </div>
         </Section>
-        <Section title="Loan and EMI details">
-          <div className="status-row">
-            <div>
-              <strong>Active loan</strong>
-              <p>{memberSummary.memberActiveLoans.length}</p>
-            </div>
-            <div>
-              <strong>Active loan outstanding</strong>
-              <p>{currency.format(memberSummary.outstanding)}</p>
-            </div>
-            <div>
-              <strong>Next EMI amount</strong>
-              <p>{currency.format(nextEmiRow?.totalDue ?? memberSummary.nextDueAmount)}</p>
-            </div>
-            <div>
-              <strong>EMI date</strong>
-              <p>{formatDate(nextEmiRow?.dueDate ?? memberSummary.dueDate)}</p>
-            </div>
-            <div>
-              <strong>Interest due</strong>
-              <p>{currency.format(memberSummary.interestDue || openingInterestDue)}</p>
-            </div>
-            <div>
-              <strong>Penalty due</strong>
-              <p>{currency.format(sortedDueRows.reduce((sum, row) => sum + Number(row.penaltyDue || 0), 0) || openingPenaltyDue)}</p>
-            </div>
-          </div>
-          <Table
-            headers={["Loan amount", "Start date", "Principal outstanding", "Interest due", "Penalty due", "Total outstanding", "Rate", "Status"]}
-            rows={memberSummary.memberActiveLoans.map((loan) => [
-              currency.format(loan.amount || 0),
-              formatDate(loanDate(loan)),
-              currency.format(calculateDerivedLoanPrincipalOutstanding(loan, state)),
-              currency.format(loan.interestOutstanding || 0),
-              currency.format(loan.penaltyOutstanding || 0),
-              currency.format(calculateLoanOutstandingWithDues(loan, state)),
-              `${Number(loan.rate || effectiveSetup.interestRate || 0)}%`,
-              loan.loanStatus || loan.status || loan.approvalStatus || "Active"
-            ])}
-          />
-        </Section>
-        <Section title="Next EMI schedule">
-          <Table
-            headers={["Month", "EMI date", "Saving due", "Loan principal", "Interest", "Penalty", "Total EMI"]}
-            rows={sortedDueRows.map((row) => [
-              row.periodName,
-              formatDate(row.dueDate),
-              currency.format(row.savingDue),
-              currency.format(row.principalDue ?? row.outstandingPrincipal),
-              currency.format(row.interestDue),
-              currency.format(row.penaltyDue),
-              currency.format(row.totalDue)
-            ])}
-          />
-        </Section>
         <Section title="Recent closed loan">
           <Table
             headers={["Loan amount", "Start date", "Closed / last paid", "Interest paid", "Status"]}
@@ -1987,9 +1949,6 @@ function Dashboard({ role, state, actor, forceGroupView = false, memberPortal = 
             ]] : []}
           />
         </Section>
-        <Section title="Recent notifications">
-          <NotificationList notifications={state.notifications} />
-        </Section>
       </Page>
     );
   }
@@ -1998,26 +1957,12 @@ function Dashboard({ role, state, actor, forceGroupView = false, memberPortal = 
     <Page title="Group Dashboard" subtitle="Live operating view for collectors, admins, approvers, and members" action={role === roles.MEMBER ? <button type="button" className="secondary-button" onClick={() => navigate("/")}>My Dashboard</button> : null}>
       <MetricGrid
         metrics={[
-          metric(dashboardCards.totalSavings.label, currency.format(dashboardCards.totalSavings.header ?? 0), WalletCards, [
-            `Members: ${dashboardCards.totalSavings.subfields.members ?? 0}`,
-            `Active members: ${dashboardCards.totalSavings.subfields.activeMembers ?? 0}`,
-            `Active member savings: ${currency.format(dashboardCards.totalSavings.subfields.activeMemberSavings ?? 0)}`,
-            `Closed/Exited member savings: ${currency.format(dashboardCards.totalSavings.subfields.closedExitedMemberSavings ?? 0)}`,
-            `Withdrawn savings: ${currency.format(dashboardCards.totalSavings.subfields.withdrawnSavings ?? 0)}`
-          ]),
           metric(dashboardCards.collectedInPeriod.label, currency.format(dashboardCards.collectedInPeriod.header ?? 0), WalletCards, [
             `Savings collected: ${currency.format(dashboardCards.collectedInPeriod.subfields.savingsCollected ?? 0)}`,
             `Principal collected: ${currency.format(dashboardCards.collectedInPeriod.subfields.principalCollected ?? 0)}`,
             `Interest collected: ${currency.format(dashboardCards.collectedInPeriod.subfields.interestCollected ?? 0)}`,
             `Penalty collected: ${currency.format(dashboardCards.collectedInPeriod.subfields.penaltyCollected ?? 0)}`,
             `Withdrawn in period: ${currency.format(dashboardCards.collectedInPeriod.subfields.withdrawnInPeriod ?? 0)}`
-          ]),
-          metric(dashboardCards.activeLoan.label, currency.format(dashboardCards.activeLoan.header ?? 0), IndianRupee, [
-            `Disbursed this month: ${currency.format(dashboardCards.activeLoan.subfields.disbursedThisMonth ?? 0)}`,
-            `Loan disbursed till now: ${currency.format(dashboardCards.activeLoan.subfields.loanDisbursedTillNow ?? 0)}`,
-            `Principal repaid till now: ${currency.format(dashboardCards.activeLoan.subfields.principalRepaidTillNow ?? 0)}`,
-            `Interest pending: ${currency.format(dashboardCards.activeLoan.subfields.interestPending ?? 0)}`,
-            `Penalty pending: ${currency.format(dashboardCards.activeLoan.subfields.penaltyPending ?? 0)}`
           ]),
           metric(dashboardCards.remainingBalance.label, currency.format(dashboardCards.remainingBalance.header ?? 0), WalletCards, [
             `Opening balance: ${currency.format(dashboardCards.remainingBalance.subfields.openingBalance ?? 0)}`,
@@ -2031,22 +1976,14 @@ function Dashboard({ role, state, actor, forceGroupView = false, memberPortal = 
             `Loan outstanding: ${currency.format(dashboardCards.remainingBalance.subfields.loanOutstanding ?? 0)}`
           ]),
           metric(dashboardCards.activeLoans.label, String(dashboardCards.activeLoans.header ?? 0), Users, [
-            `Disbursed till now: ${dashboardCards.activeLoans.subfields.disbursedTillNow ?? 0}`,
-            `Closed till now: ${dashboardCards.activeLoans.subfields.closedTillNow ?? 0}`,
             `Activated this month: ${dashboardCards.activeLoans.subfields.activatedThisMonth ?? 0}`,
             `Overdue loans: ${dashboardCards.activeLoans.subfields.overdueLoans ?? 0}`,
             `Pending approval loans: ${dashboardCards.activeLoans.subfields.pendingApprovalLoans ?? 0}`
           ]),
-          metric("Financial Period", financialPeriodLabel, CalendarCheck, [
-            `Cycle start: ${financialPeriodStart.toLocaleDateString("en-IN", { year: "numeric", month: "long", day: "numeric" })}`,
-            `Repayment date: ${financialDueDate.toLocaleDateString("en-IN", { year: "numeric", month: "long", day: "numeric" })}`,
-            `Repayment day: ${Math.min(28, Math.max(1, Number(group.loanDueDay || 1)))}`
-          ]),
-          metric(dashboardCards.openPeriod.label, dashboardCards.openPeriod.header ?? "None", ShieldCheck, [
-            `Current open month: ${dashboardCards.openPeriod.subfields.currentOpenMonth ?? "None"}`,
-            `Period status: ${dashboardCards.openPeriod.subfields.periodStatus ?? "Not open"}`,
-            `Start date: ${dashboardCards.openPeriod.subfields.startDate ?? "-"}`,
-            `End date: ${dashboardCards.openPeriod.subfields.endDate ?? "-"}`
+          metric("Financial period", `${financialPeriodLabel}`, CalendarCheck, [
+            `Cycle: ${financialPeriodStart.toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" })} - ${financialDueDate.toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" })}`,
+            `Repayment day: ${Math.min(28, Math.max(1, Number(group.loanDueDay || 1)))}`,
+            `Open period: ${dashboardCards.openPeriod.subfields.currentOpenMonth ?? "None"}`
           ])
         ].filter(Boolean)}
       />
@@ -2093,25 +2030,94 @@ function applyShareDistributionToMembers(members, shareRows) {
   });
 }
 
-function getStateWithComputedShares(state) {
-  const sharePeriod = getDashboardPeriod(state);
+function getSharePeriodsForState(state, { startDate = null, endDate = null } = {}) {
+  const periods = (state.periods || []).filter((period) => period?.startDate && period?.endDate);
+  const transactionPeriods = getCompletedTransactions(state.transactions || [])
+    .map((transaction) => transaction.transactionDate)
+    .filter(Boolean)
+    .map((transactionDate) => ({
+      startDate: toIsoDateValue(new Date(transactionDate)),
+      endDate: toIsoDateValue(new Date(transactionDate))
+    }));
+
+  if (!startDate && !endDate) {
+    if (periods.length > 0) {
+      return periods;
+    }
+
+    const uniquePeriods = transactionPeriods.filter((period, index, all) => all.findIndex((candidate) =>
+      String(candidate.startDate) === String(period.startDate)
+      && String(candidate.endDate) === String(period.endDate)
+    ) === index);
+    return uniquePeriods.length > 0 ? uniquePeriods : [getDashboardPeriod(state)].filter(Boolean);
+  }
+
+  const candidatePeriods = periods.filter((period) => {
+    const periodStart = new Date(period.startDate);
+    const periodEnd = new Date(period.endDate);
+    const rangeStart = startDate ? new Date(startDate) : null;
+    const rangeEnd = endDate ? new Date(endDate) : null;
+    const overlapsStart = !rangeStart || periodEnd >= rangeStart;
+    const overlapsEnd = !rangeEnd || periodStart <= rangeEnd;
+    return overlapsStart && overlapsEnd;
+  });
+
+  if (candidatePeriods.length > 0) return candidatePeriods;
+  return [{
+    startDate: startDate || getDashboardPeriod(state)?.startDate || toIsoDateValue(),
+    endDate: endDate || getDashboardPeriod(state)?.endDate || toIsoDateValue()
+  }].filter(Boolean);
+}
+
+function getAccumulatedShareByMember(state, { startDate = null, endDate = null } = {}) {
+  const accumulatedShareByMember = Object.fromEntries((state.members || []).map((member) => [String(member.id), 0]));
+  const completedTrx = getCompletedTransactions(state.transactions || []);
+  const rangeStart = startDate || getDashboardPeriod(state)?.startDate || toIsoDateValue();
+  const rangeEnd = endDate || getDashboardPeriod(state)?.endDate || toIsoDateValue();
+  const rangeTransactions = completedTrx.filter((transaction) => {
+    const transactionDate = toIsoDateValue(new Date(transaction.transactionDate));
+    return transactionDate >= rangeStart && transactionDate <= rangeEnd;
+  });
+
+  if (rangeTransactions.length === 0) {
+    return accumulatedShareByMember;
+  }
+
   const shareRows = calculateEventBasedShareDistribution({
     members: state.members || [],
-    transactions: getCompletedTransactions(state.transactions || []),
+    transactions: rangeTransactions,
     loans: (state.loans || []).filter((loan) =>
       isCompletedFinancialStatus(loan.approvalStatus)
       || ["ACTIVE", "COMPLETED", "APPROVED", "CLOSED"].includes(String(loan.status ?? loan.loanStatus ?? "").toUpperCase())
     ),
-    period: sharePeriod
+    period: {
+      name: `${rangeStart} to ${rangeEnd}`,
+      startDate: rangeStart,
+      endDate: rangeEnd
+    }
   });
-  const shareByMember = Object.fromEntries(shareRows.map((row) => [row.memberId, row]));
+
+  shareRows.forEach((row) => {
+    const memberId = String(row.memberId);
+    accumulatedShareByMember[memberId] = Number(accumulatedShareByMember[memberId] || 0) + Number(row.shareAmount || 0);
+  });
+
+  return accumulatedShareByMember;
+}
+
+function getStateWithComputedShares(state) {
+  const accumulatedShareByMember = getAccumulatedShareByMember(state);
   const stateWithGain = {
     ...state,
-    members: (state.members || []).map((member) => ({
-      ...member,
-      earnedFromGroup: Number(shareByMember[member.id]?.shareAmount || 0),
-      groupGain: Number(shareByMember[member.id]?.shareAmount || 0)
-    }))
+    members: (state.members || []).map((member) => {
+      const memberId = String(member.id);
+      const shareAmount = Number(accumulatedShareByMember[memberId] || 0);
+      return {
+        ...member,
+        earnedFromGroup: shareAmount,
+        groupGain: shareAmount
+      };
+    })
   };
   const summaries = (stateWithGain.members || []).map((member) => [member.id, calculateMemberLedgerSummary(member, stateWithGain)]);
   const totalShareAmount = summaries.reduce((sum, [, summary]) => sum + Math.max(0, summary.shareAmount), 0);
@@ -2130,13 +2136,13 @@ function getStateWithComputedShares(state) {
 
 function getVisibleNotifications(notifications = [], role, member) {
   if (role !== roles.MEMBER) return notifications;
-  return notifications.filter((notification) =>
-    (Array.isArray(notification.recipientMemberIds) && notification.recipientMemberIds.length > 0
+  return notifications.filter((notification) => {
+    const isRecipientListMatch = Array.isArray(notification.recipientMemberIds) && notification.recipientMemberIds.length > 0
       ? notification.recipientMemberIds.map(String).includes(String(member?.id))
-      : true)
-    &&
-    !notification.memberId || String(notification.memberId) === String(member?.id)
-  );
+      : true;
+    const isMemberIdMatch = !notification.memberId || String(notification.memberId) === String(member?.id);
+    return isRecipientListMatch && isMemberIdMatch;
+  });
 }
 
 function isGroupAdminActor(state, actor) {
@@ -2627,21 +2633,6 @@ function GroupSelectionPage({ state, setState, selectedGroupId, setSelectedGroup
   function selectGroup(groupId) {
     setSelectedGroupId(groupId);
     navigate("/", { replace: true });
-  }
-
-  async function ensureLatestTenantData() {
-    if (!repository.isConfigured()) return;
-    try {
-      const tenantData = await repository.listTenantData();
-      if (!tenantData) return;
-      const keysToCheck = ["groups", "members", "periods", "loans", "transactions", "approvals", "expenses"];
-      const stale = keysToCheck.some((k) => (Array.isArray(tenantData[k]) ? tenantData[k].length : 0) !== (Array.isArray(state[k]) ? state[k].length : 0));
-      if (stale) {
-        setState((current) => ({ ...tenantData, session: { signedIn: true, user: current.session?.user ?? {} } }));
-      }
-    } catch (err) {
-      console.warn('Tenant refresh failed', err);
-    }
   }
 
   return (
@@ -3312,8 +3303,8 @@ function Subscriptions({ state, setState, actor, selectedGroup, setConfirmDialog
   );
 }
 
-function SetupPage({ state, setState, actor, selectedGroup, initialSetupTab = "group", initialFinancialTab = "approvers", setConfirmDialog, setNotification, migrationLoading, setMigrationLoading }) {
-  useEffect(() => { ensureLatestTenantData(); }, []);
+function SetupPage({ state, setState, actor, selectedGroup, initialSetupTab = "group", initialFinancialTab = "approvers", setConfirmDialog, setNotification, migrationLoading, setMigrationLoading, ensureLatestTenantData }) {
+  useEffect(() => { ensureLatestTenantData(); }, [ensureLatestTenantData]);
   const setupLocation = useLocation();
   const group = selectedGroup ?? state.groups[0];
   const blankIfUnset = (value) => value === null || value === undefined ? "" : value;
@@ -5313,7 +5304,7 @@ function Transactions({ state, setState, actor, setSelectedGroupId, setConfirmDi
   // Add fallback for periods
   const periodsData = Array.isArray(state.periods) ? state.periods : [];
   
-  const openPeriod = getOpenPeriod(periodsData);
+  const openPeriod = getOpenPeriod(periodsData) || getCurrentMonthPeriod(periodsData);
   const isGroupExpense = values.memberId === GROUP_EXPENSE_MEMBER_ID;
   let member = isGroupExpense ? null : state.members.find((item) => String(item.id) === String(values.memberId));
   const memberActiveLoans = state.loans
@@ -5321,10 +5312,13 @@ function Transactions({ state, setState, actor, setSelectedGroupId, setConfirmDi
     .sort((a, b) => String(a.startDate || "").localeCompare(String(b.startDate || "")));
   const loan = memberActiveLoans[0];
   const totalPrincipalOutstanding = memberActiveLoans.reduce((sum, item) => sum + Number(item.principalOutstanding || 0), 0);
+  // Use member finance summary as authoritative source for interest due so it matches dashboard and pending-due pages
+  const memberSummary = member ? calculateMemberFinanceSummary(member, state, getDashboardPeriod(state), actor) : null;
+  const maxInterestDue = Number(memberSummary?.interestDue || 0);
+  // Backwards-compatible: also compute detailed interest rows when needed
   const interestDueDetails = member ? calculateMemberLoanInterestDueDetails(member, state, new Date(values.transactionDate || new Date())) : [];
   const calculatedInterestDue = interestDueDetails.reduce((sum, row) => sum + Number(row.calculated || 0), 0);
   const totalInterestOutstanding = interestDueDetails.reduce((sum, row) => sum + Number(row.due || 0), 0);
-  const maxInterestDue = totalInterestOutstanding;
   const maxPrincipalDue = totalPrincipalOutstanding;
   const paymentDate = new Date(values.transactionDate);
   const dueDateForPayment = getLoanDueDate(state.groups[0]);
@@ -5340,12 +5334,19 @@ function Transactions({ state, setState, actor, setSelectedGroupId, setConfirmDi
     amount: Number(values.amount) || 0,
     dueSavings: remainingMonthlySavingDue,
     principalOutstanding: totalPrincipalOutstanding,
-    interestOutstanding: totalInterestOutstanding,
+    interestOutstanding: maxInterestDue,
     penaltyOutstanding: totalPenaltyOutstanding
   });
   
   const allocation = editableAllocation || defaultAllocation;
   const expenseLineTotal = expenseLines.reduce((sum, line) => sum + Number(line.amount || 0), 0);
+  
+  // For pure collection types, place full amount in the appropriate bucket
+  const finalAllocation = values.transactionType === "Interest Collection"
+    ? { savings: 0, principal: 0, interest: Number(values.amount || 0), penalty: 0, excess: 0 }
+    : values.transactionType === "Penalty Collection"
+      ? { savings: 0, principal: 0, interest: 0, penalty: Number(values.amount || 0), excess: 0 }
+      : allocation;
   
   // When amount changes, reset editable allocation and recalculate
   useEffect(() => {
@@ -5417,17 +5418,18 @@ function Transactions({ state, setState, actor, setSelectedGroupId, setConfirmDi
   }
   
   function validateAllocation() {
-    const allocationTotal = Object.values(allocation).reduce((sum, val) => sum + val, 0);
+    const currentAllocation = editableAllocation ?? finalAllocation;
+    const allocationTotal = Object.values(currentAllocation).reduce((sum, val) => sum + val, 0);
     const collectedAmount = Number(values.amount) || 0;
     if (allocationTotal > collectedAmount + 0.01) {
       setAllocationErrors({ total: `Split total (${currency.format(allocationTotal)}) cannot be more than amount collected (${currency.format(collectedAmount)}).` });
       return false;
     }
-    if (Number(allocation.interest || 0) > maxInterestDue + 0.01) {
+    if (Number(currentAllocation.interest || 0) > maxInterestDue + 0.01) {
       setAllocationErrors({ total: `Interest cannot be more than calculated due ${currency.format(maxInterestDue)}.` });
       return false;
     }
-    if (Number(allocation.principal || 0) > maxPrincipalDue + 0.01) {
+    if (Number(currentAllocation.principal || 0) > maxPrincipalDue + 0.01) {
       setAllocationErrors({ total: `Principal cannot be more than outstanding amount ${currency.format(maxPrincipalDue)}.` });
       return false;
     }
@@ -5735,10 +5737,10 @@ function Transactions({ state, setState, actor, setSelectedGroupId, setConfirmDi
             periodId: effectivePeriod?.id ?? null,
             transactionDate: result.data.transactionDate,
             amount: Number(result.data.amount),
-            transactionType: 'Savings Collection',
+            transactionType: values.transactionType,
             approvalStatus: hasGroupApprovers ? 'Pending' : 'Completed',
             createdBy: actor.id,
-            allocation: allocation
+            allocation: finalAllocation
           });
 
           const approvalRecord = hasGroupApprovers
@@ -5804,7 +5806,7 @@ function Transactions({ state, setState, actor, setSelectedGroupId, setConfirmDi
             approvals: [...persistedApprovals, ...current.approvals],
             notifications: hasGroupApprovers
               ? [
-                  { id: makeId("ntf"), groupId: state.groups[0]?.id, title: "Transaction approval requested", body: `${actor.name} submitted ${currency.format(result.data.amount)} for approval.`, type: "info", createdAt: new Date().toISOString() },
+                  { id: makeId("ntf"), groupId: state.groups[0]?.id, title: "Transaction approval requested", body: `${actor.name} submitted ${currency.format(result.data.amount)} ${values.transactionType.toLowerCase()} for ${member?.fullName ?? "the selected member"} for approval.`, type: "info", createdAt: new Date().toISOString() },
                   ...current.notifications
                 ]
               : current.notifications
@@ -5889,7 +5891,7 @@ function Transactions({ state, setState, actor, setSelectedGroupId, setConfirmDi
               className="secondary-button"
               onClick={() => {
                 setAllocationEditing(true);
-                setEditableAllocation({ ...allocation });
+                setEditableAllocation({ ...finalAllocation });
               }}
             >
               Edit allocation
@@ -5898,29 +5900,32 @@ function Transactions({ state, setState, actor, setSelectedGroupId, setConfirmDi
         )}
         
         <div className="allocation" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-          {Object.entries(allocation).map(([keyName, value]) => (
-            <div key={keyName} style={{ padding: '12px', border: '1px solid #e5e7eb', borderRadius: '6px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', textTransform: 'capitalize' }}>
-                {keyName}
-              </label>
-              {keyName === "interest" && <small className="section-note">Max calculated: {currency.format(maxInterestDue)}</small>}
-              {keyName === "principal" && <small className="section-note">Outstanding: {currency.format(maxPrincipalDue)}</small>}
-              {keyName === "savings" && <small className="section-note">Remaining this month: {currency.format(remainingMonthlySavingDue)}</small>}
-              {keyName === "excess" && <small className="section-note">Auto calculated from remaining split amount</small>}
-              {allocationEditing && keyName !== "excess" ? (
-                <input
-                  type="number"
-                  value={value}
-                  onChange={(e) => handleAllocationChange(keyName, e.target.value)}
-                  style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px' }}
-                />
-              ) : (
-                <div style={{ fontSize: '1.1rem', fontWeight: '700', color: 'var(--primary)' }}>
-                  {currency.format(value)}
-                </div>
-              )}
-            </div>
-          ))}
+          {['savings','interest','penalty','principal','excess'].map((keyName) => {
+            const value = Number(finalAllocation?.[keyName] || 0);
+            return (
+              <div key={keyName} style={{ padding: '12px', border: '1px solid #e5e7eb', borderRadius: '6px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', textTransform: 'capitalize' }}>
+                  {keyName}
+                </label>
+                {keyName === "interest" && <small className="section-note">Max calculated: {currency.format(maxInterestDue)}</small>}
+                {keyName === "principal" && <small className="section-note">Outstanding: {currency.format(maxPrincipalDue)}</small>}
+                {keyName === "savings" && <small className="section-note">Remaining this month: {currency.format(Math.max(0, remainingMonthlySavingDue))}</small>}
+                {keyName === "excess" && <small className="section-note">Auto calculated from remaining split amount</small>}
+                {allocationEditing && keyName !== "excess" ? (
+                  <input
+                    type="number"
+                    value={value}
+                    onChange={(e) => handleAllocationChange(keyName, e.target.value)}
+                    style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px' }}
+                  />
+                ) : (
+                  <div style={{ fontSize: '1.1rem', fontWeight: '700', color: 'var(--primary)' }}>
+                    {currency.format(value)}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
         
         {allocationEditing && (
@@ -7096,6 +7101,45 @@ function PendingDues({ state, setState, actor, setNotification }) {
     setNotification({ type: "success", message: "Pending due record removed from this list." });
   }
 
+  async function copyAllPendingDues() {
+    if (dueRows.length === 0) {
+      setNotification({ type: "info", message: "No pending dues to copy." });
+      return;
+    }
+    const headerLines = [
+      `Pending dues for ${state.groups[0]?.name || "the group"}`,
+      `Generated on ${new Date().toLocaleDateString("en-IN", { year: "numeric", month: "long", day: "numeric" })}`,
+      ""
+    ];
+    const rowBlocks = dueRows.map((row) => {
+      return [
+        `Member: ${row.memberName}`,
+        `Saving: ${currency.format(row.savingDue)}`,
+        `Principal: ${currency.format(row.principalDue ?? row.outstandingPrincipal)}`,
+        `Interest: ${currency.format(row.interestDue)}`,
+        `Penalty: ${currency.format(row.penaltyDue)}`,
+        `Total: ${currency.format(row.totalDue)}`
+      ].join("\n");
+    });
+    const text = [
+      ...headerLines,
+      ...dueRows.flatMap((row, index) => {
+        const sharedHeader = [
+          `Month: ${row.periodName}`,
+          `Due date: ${new Date(row.dueDate).toLocaleDateString("en-IN", { year: "numeric", month: "long", day: "numeric" })}`
+        ];
+        return [...sharedHeader, rowBlocks[index], ""];
+      })
+    ].join("\n");
+    try {
+      if (!navigator.clipboard) throw new Error("Clipboard not available");
+      await navigator.clipboard.writeText(text);
+      setNotification({ type: "success", message: "Pending dues copied. You can paste it anywhere." });
+    } catch (error) {
+      setNotification({ type: "error", message: `Unable to copy pending dues: ${error.message}`, details: serializeError(error) });
+    }
+  }
+
   function notifyMembers() {
     if (dueRows.length === 0) {
       setNotification({ type: "info", message: "No pending dues to notify." });
@@ -7109,6 +7153,7 @@ function PendingDues({ state, setState, actor, setNotification }) {
     const notifications = Object.entries(rowsByMember).map(([memberId, rows]) => {
       const total = rows.reduce((sum, row) => sum + row.totalDue, 0);
       const latestDue = rows.map((row) => row.dueDate).sort()[0];
+      const memberName = rows[0]?.memberName || "Member";
       const body = rows.map((row) =>
         `${row.periodName}: Saving ${currency.format(row.savingDue)}, principal due ${currency.format(row.principalDue ?? row.outstandingPrincipal)}, interest ${currency.format(row.interestDue)}, penalty ${currency.format(row.penaltyDue)}, total ${currency.format(row.totalDue)}, due ${new Date(row.dueDate).toLocaleDateString("en-IN")}`
       ).join(" | ");
@@ -7116,8 +7161,9 @@ function PendingDues({ state, setState, actor, setNotification }) {
         id: makeId("ntf"),
         groupId: state.groups[0]?.id,
         memberId,
-        title: `Payment due: ${currency.format(total)}`,
-        body: `${body}. Next due date: ${new Date(latestDue).toLocaleDateString("en-IN", { year: "numeric", month: "long", day: "numeric" })}`,
+        recipientMemberIds: [memberId],
+        title: `Payment due for ${memberName}: ${currency.format(total)}`,
+        body: `Pending dues for ${memberName}: ${body}. Next due date: ${new Date(latestDue).toLocaleDateString("en-IN", { year: "numeric", month: "long", day: "numeric" })}`,
         type: "warning",
         createdAt: new Date().toISOString(),
         read: false
@@ -7134,7 +7180,12 @@ function PendingDues({ state, setState, actor, setNotification }) {
     <Page
       title="Pending Dues"
       subtitle={memberOnly ? "Your pending payment amount and due dates" : "Members who are yet to pay minimum due for current or past months"}
-      action={!memberOnly ? <button type="button" className="secondary-button" onClick={notifyMembers}>Notify members</button> : null}
+      action={!memberOnly ? (
+        <>
+          <button type="button" className="secondary-button" onClick={notifyMembers}>Notify members</button>
+          <button type="button" className="secondary-button" onClick={copyAllPendingDues}>Copy pending dues</button>
+        </>
+      ) : null}
     >
       <Table
         headers={["Month", "Member", "Due date", "Saving", "Principal due", "Interest", "Penalty", "Total to pay", ...(!memberOnly ? ["Action"] : [])]}
@@ -7359,6 +7410,42 @@ function Loans({ state, setState, actor, setConfirmDialog, setNotification }) {
       return;
     }
 
+    // Check if loan start date is before member joining date
+    const memberJoinDate = selectedMember?.dateJoined;
+    const loanStartDate = values.startDate;
+    if (memberJoinDate && loanStartDate < memberJoinDate) {
+      setConfirmDialog({
+        title: "Loan start date before joining date",
+        message: `The loan start date (${loanStartDate}) is before the member's joining date (${memberJoinDate}). Would you like to update the member's joining date to allow this loan?`,
+        onConfirm: async () => {
+          setConfirmDialog(null);
+          try {
+            await repository.updateMember(selectedMember.id, { dateJoined: loanStartDate });
+            setState((current) => ({
+              ...current,
+              members: current.members.map((member) =>
+                String(member.id) === String(selectedMember.id)
+                  ? { ...member, dateJoined: loanStartDate }
+                  : member
+              )
+            }));
+            setNotification({ type: "success", message: `Member's joining date updated to ${loanStartDate}. You can now proceed with the loan.` });
+            setTimeout(() => setNotification(null), 3000);
+          } catch (error) {
+            setNotification({ type: "error", message: `Failed to update joining date: ${error.message}` });
+            setTimeout(() => setNotification(null), 4000);
+          }
+        },
+        onCancel: () => {
+          setConfirmDialog(null);
+          setErrors((current) => ({ ...current, startDate: "Loan start date cannot be before member joining date." }));
+          setNotification({ type: "error", message: "Loan start date must be on or after the member's joining date." });
+          setTimeout(() => setNotification(null), 4000);
+        }
+      });
+      return;
+    }
+
     const remainingBalance = Math.max(0, calculateGroupFinanceSummary(state).remainingBalance);
     const setupLimit = setup.loanLimit;
     const loanLimit = setupLimit > 0 ? setupLimit : remainingBalance;
@@ -7525,10 +7612,10 @@ function Approvals({ state, setState, actor, setConfirmDialog, setNotification }
     || (member.username && actor?.username && normalizeLookup(member.username) === normalizeLookup(actor.username))
     || (member.fullName && actor?.name && normalizeLookup(member.fullName) === normalizeLookup(actor.name))
   );
-  const visibleApprovals = (state.approvals || []).filter((approval) =>
-    adminLikeApproverView
-    || (approval.status === "Pending" && isApprovalAssignedToActor(approval, actor, actorMembers))
-  );
+  const visibleApprovals = (state.approvals || [])
+    .filter((approval) => approval.status === "Pending")
+    .filter((approval) => adminLikeApproverView || isApprovalAssignedToActor(approval, actor, actorMembers))
+    .sort((a, b) => new Date(b.createdAt || b.updatedAt || 0) - new Date(a.createdAt || a.updatedAt || 0));
 
   async function applyDecision(id, status) {
     const targetBeforeDecision = (state.approvals || []).find((approval) => String(approval.id) === String(id));
@@ -7885,7 +7972,7 @@ function Approvals({ state, setState, actor, setConfirmDialog, setNotification }
             </article>
           );
         })}
-        {visibleApprovals.length === 0 && <p className="section-note">No approvals assigned to your login.</p>}
+        {visibleApprovals.length === 0 && <p className="section-note">No pending approvals assigned to your login.</p>}
       </div>
     </Page>
   );
@@ -7930,13 +8017,7 @@ function Reports({ state, actor, setNotification }) {
       + Number(transaction.allocation?.interest || 0)
       + Number(transaction.allocation?.penalty || 0);
   }, 0);
-  const groupGainInRange = rangeTransactions.reduce((sum, transaction) => {
-    if (isMigratedOpeningTransaction(transaction) || transaction.transactionType === "Withdrawal") return sum;
-    return sum
-      + Number(transaction.allocation?.interest || 0)
-      + Number(transaction.allocation?.penalty || 0)
-      + Number(transaction.allocation?.charges || 0);
-  }, 0);
+  const groupGainInRange = Object.values(shareByMemberInRange).reduce((sum, amount) => sum + Number(amount || 0), 0);
   const groupExpensesInRange = rangeExpenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
   const groupWithdrawnInRange = rangeTransactions
     .filter((transaction) => transaction.transactionType === "Withdrawal")
@@ -7957,6 +8038,10 @@ function Reports({ state, actor, setNotification }) {
     map.set(memberId, existing);
     return map;
   }, new Map());
+  const shareByMemberInRange = getAccumulatedShareByMember(snapshotState, {
+    startDate: reportRange.startDate,
+    endDate: reportRange.endDate
+  });
 
   const memberSummaries = (snapshotState.members || []).map((member) => {
     const memberTransactions = rangeTransactions
@@ -7973,13 +8058,7 @@ function Reports({ state, actor, setNotification }) {
         + Number(transaction.allocation?.interest || 0)
         + Number(transaction.allocation?.penalty || 0);
     }, 0);
-    const gainInRange = memberTransactions.reduce((sum, transaction) => {
-      if (isMigratedOpeningTransaction(transaction) || transaction.transactionType === "Withdrawal") return sum;
-      return sum
-        + Number(transaction.allocation?.interest || 0)
-        + Number(transaction.allocation?.penalty || 0)
-        + Number(transaction.allocation?.charges || 0);
-    }, 0);
+    const gainInRange = Number(shareByMemberInRange[String(member.id)] || 0);
     const expenseInRange = Math.abs(memberTransactions
       .filter((transaction) => transaction.transactionType === "Group Expense Share")
       .reduce((sum, transaction) => sum + Number(transaction.allocation?.savings ?? transaction.amount ?? 0), 0));
@@ -8525,7 +8604,15 @@ function Table({ headers, rows }) {
   const cellTitle = (cell) => {
     if (cell === null || cell === undefined) return "";
     if (typeof cell === "string" || typeof cell === "number") return String(cell);
+    if (Array.isArray(cell)) return cell.map(cellTitle).filter(Boolean).join(" \n");
     return "";
+  };
+
+  const renderCell = (cell) => {
+    if (cell === null || cell === undefined) return null;
+    if (typeof cell === "string" || typeof cell === "number") return String(cell);
+    if (Array.isArray(cell)) return cell.map((item, index) => <span key={index} style={{ marginRight: 8 }}>{renderCell(item)}</span>);
+    return cell;
   };
 
   return (
@@ -8539,7 +8626,7 @@ function Table({ headers, rows }) {
             <tr><td className="empty-table-cell" colSpan={headers.length}>No records yet</td></tr>
           ) : rows.map((row, rowIndex) => (
             <tr key={rowIndex}>
-              {row.map((cell, index) => <td key={`${rowIndex}-${index}`} title={cellTitle(cell)}>{cell}</td>)}
+              {row.map((cell, index) => <td key={`${rowIndex}-${index}`} title={cellTitle(cell)}>{renderCell(cell)}</td>)}
             </tr>
           ))}
         </tbody>

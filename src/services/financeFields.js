@@ -79,7 +79,7 @@ export function isCompletedFinancialStatus(status) {
 }
 
 export function getCompletedTransactions(transactions = []) {
-  return transactions.filter((transaction) => isCompletedFinancialStatus(transaction.approvalStatus));
+  return transactions.filter((transaction) => isCompletedFinancialStatus(transaction.approvalStatus ?? transaction.approval_status));
 }
 
 export function loanBelongsToMember(loan, member) {
@@ -623,9 +623,8 @@ export function calculateMemberLedgerSummary(member, state) {
   const withdrawn = Math.abs(memberTransactions
     .filter((transaction) => transaction.transactionType === "Withdrawal")
     .reduce((sum, transaction) => sum + Number(transaction.allocation?.savings ?? -Math.abs(transaction.amount ?? 0)), 0));
-  const openingImpact = calculateLegacyGroupOpeningMemberImpact(member, state);
-  const gain = Number(member?.earnedFromGroup ?? member?.groupGain ?? 0) + Number(openingImpact.gain || 0);
-  const totalExpense = expense + Number(openingImpact.expense || 0);
+  const gain = Number(member?.earnedFromGroup ?? member?.groupGain ?? member?.shares ?? 0);
+  const totalExpense = expense;
   const loanOutstanding = (state.loans || [])
     .filter((loan) => loanBelongsToMember(loan, member) && isOutstandingLoan(loan))
     .reduce((sum, loan) => sum
@@ -722,9 +721,15 @@ export function getEffectiveMemberSetup(member, group = {}) {
 }
 
 export function completedTransactionsForMember(state, memberId, untilDate = null) {
-  return getCompletedTransactions(state.transactions || [])
+  const transactions = getCompletedTransactions(state.transactions || [])
     .filter((transaction) => String(transaction.memberId) === String(memberId))
     .filter((transaction) => !untilDate || String(transaction.transactionDate || "") <= String(untilDate));
+  const parentIds = new Set(transactions.filter((trx) => String(trx.parentTransactionId || "").trim()).map((trx) => String(trx.parentTransactionId)));
+  return transactions.filter((transaction) => {
+    if (String(transaction.reversedFlag || "").toUpperCase() === "Y") return false;
+    if (parentIds.has(String(transaction.id))) return false;
+    return true;
+  });
 }
 
 export function allocationPaidForMember(state, memberId, bucket, { fromDate = null, untilDate = null } = {}) {
