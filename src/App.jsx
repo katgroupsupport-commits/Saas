@@ -2629,6 +2629,21 @@ function GroupSelectionPage({ state, setState, selectedGroupId, setSelectedGroup
     navigate("/", { replace: true });
   }
 
+  async function ensureLatestTenantData() {
+    if (!repository.isConfigured()) return;
+    try {
+      const tenantData = await repository.listTenantData();
+      if (!tenantData) return;
+      const keysToCheck = ["groups", "members", "periods", "loans", "transactions", "approvals", "expenses"];
+      const stale = keysToCheck.some((k) => (Array.isArray(tenantData[k]) ? tenantData[k].length : 0) !== (Array.isArray(state[k]) ? state[k].length : 0));
+      if (stale) {
+        setState((current) => ({ ...tenantData, session: { signedIn: true, user: current.session?.user ?? {} } }));
+      }
+    } catch (err) {
+      console.warn('Tenant refresh failed', err);
+    }
+  }
+
   return (
     <div className="page">
       <div className="page-header">
@@ -3298,6 +3313,7 @@ function Subscriptions({ state, setState, actor, selectedGroup, setConfirmDialog
 }
 
 function SetupPage({ state, setState, actor, selectedGroup, initialSetupTab = "group", initialFinancialTab = "approvers", setConfirmDialog, setNotification, migrationLoading, setMigrationLoading }) {
+  useEffect(() => { ensureLatestTenantData(); }, []);
   const setupLocation = useLocation();
   const group = selectedGroup ?? state.groups[0];
   const blankIfUnset = (value) => value === null || value === undefined ? "" : value;
@@ -6287,6 +6303,7 @@ function Adjustments({ state, setState, actor, setConfirmDialog, setNotification
 }
 
 function Corrections({ state, setState, actor, setConfirmDialog, setNotification }) {
+  useEffect(() => { ensureLatestTenantData(); }, []);
   return (
     <Page title="Corrections" subtitle="Use adjustments for partial fixes and reversals for full wrong entries" action={null}>
       <Adjustments state={state} setState={setState} actor={actor} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />
@@ -7281,6 +7298,7 @@ function Withdrawals({ state, setState, actor, setConfirmDialog, setNotification
 }
 
 function Loans({ state, setState, actor, setConfirmDialog, setNotification }) {
+  useEffect(() => { ensureLatestTenantData(); }, []);
   const requesterMember = getCurrentMember(state, actor);
   const memberOnlyRequest = !isGroupAdminActor(state, actor);
   const activeLoanMembers = memberOnlyRequest && requesterMember
