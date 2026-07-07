@@ -239,9 +239,6 @@ function HubGridPage({ title, items }) {
   const navigate = useNavigate();
   return (
     <section className="hub-grid-page">
-      <div className="page-heading">
-        <h2>{title}</h2>
-      </div>
       <div className="hub-grid">
         {items.map((item) => {
           const Icon = item.Icon;
@@ -337,53 +334,15 @@ async function syncMemberSavingsCorrectionsToSupabase(tenantData) {
   try {
     const membersToUpdate = [];
     
-    // Log all transactions to see what we have
     const reversals = tenantData.transactions.filter((t) => t.reversedFlag === "Y" || String(t.transactionNumber || "").startsWith("REV"));
-    console.log(`🔍 Total transactions loaded: ${tenantData.transactions.length}, Reversals: ${reversals.length}`, reversals);
     
-    // Find Ajinkya specifically
     const ajinkya = tenantData.members.find(m => m.fullName === "Ajinkya More");
     if (ajinkya) {
       const ajinkyaTransactions = tenantData.transactions.filter(t => String(t.memberId) === String(ajinkya.id));
       const ajinkyaReversals = ajinkyaTransactions.filter(t => t.reversedFlag === "Y" || String(t.transactionNumber || "").startsWith("REV"));
       const ajinkyaParentIds = new Set(ajinkyaReversals.map(r => r.parentTransactionId).filter(id => id));
       const ajinkyaParents = ajinkyaTransactions.filter(t => ajinkyaParentIds.has(t.id));
-      
-      console.log(`🎯 AJINKYA MORE DETAILED ANALYSIS:`, {
-        id: ajinkya.id,
-        storedSavings: Number(ajinkya.savings || 0),
-        totalTransactions: ajinkyaTransactions.length,
-        reversals: ajinkyaReversals.length,
-        parentTransactions: ajinkyaParents.length
-      });
-      
-      if (ajinkyaReversals.length > 0) {
-        console.log(`  └─ Reversals:`, ajinkyaReversals.map(r => ({
-          id: r.id,
-          amount: r.amount,
-          allocationSavings: r.allocation?.savings,
-          trxNumber: r.transactionNumber,
-          status: r.approvalStatus,
-          parentId: r.parentTransactionId,
-          reversedFlag: r.reversedFlag
-        })));
-      }
-      
-      if (ajinkyaParents.length > 0) {
-        console.log(`  └─ Parent Transactions (to be reversed):`, ajinkyaParents.map(p => ({
-          id: p.id,
-          amount: p.amount,
-          allocationSavings: p.allocation?.savings,
-          trxNumber: p.transactionNumber,
-          status: p.approvalStatus
-        })));
-      }
-      
       const ledgerSummary = calculateMemberLedgerSummary(ajinkya, tenantData);
-      console.log(`  └─ Calculated Summary:`, {
-        calculatedSavings: ledgerSummary.savings,
-        difference: ledgerSummary.savings - Number(ajinkya.savings || 0)
-      });
     }
     
     for (const member of tenantData.members) {
@@ -395,22 +354,7 @@ async function syncMemberSavingsCorrectionsToSupabase(tenantData) {
       const storedSavings = Number(member.savings || 0);
       
       const diff = calculatedSavings - storedSavings;
-      if (memberReversals.length > 0 || Math.abs(diff) > 0.01) {
-        console.log(`📊 ${member.fullName} (${member.id}):`, {
-          transactions: memberTransactions.length,
-          reversals: memberReversals.length,
-          stored: storedSavings,
-          calculated: calculatedSavings,
-          diff: diff
-        });
-      }
-      
       if (Math.abs(diff) > 0.01) {
-        console.log(`✅ Needs correction: ${member.fullName}`, {
-          stored: storedSavings,
-          calculated: calculatedSavings,
-          diff: diff
-        });
         membersToUpdate.push({
           memberId: member.id,
           correctedSavings: calculatedSavings,
@@ -420,11 +364,8 @@ async function syncMemberSavingsCorrectionsToSupabase(tenantData) {
     }
     
     if (membersToUpdate.length > 0) {
-      console.log(`💾 Updating ${membersToUpdate.length} members`, membersToUpdate);
-      
       for (const update of membersToUpdate) {
         try {
-          console.log(`  ↳ Updating ${update.memberName} savings to ₹${update.correctedSavings.toFixed(2)}`);
           await repository.updateMember(update.memberId, {
             savings: update.correctedSavings
           });
@@ -526,6 +467,28 @@ function App() {
       : (selectedGroupMember?.memberRole ?? roles.MEMBER);
   const menu = visibleMenu(role);
   const sidebarSections = buildSidebarSections(menu, role);
+  const visibleHomeHubButtons = homeHubButtons;
+  const visibleTransactionsHubButtons = role === roles.MEMBER
+    ? transactionsHubButtons.filter((item) => ["/operations/loans", "/operations/withdrawals"].includes(item.to))
+    : transactionsHubButtons;
+  const visibleSetupHubButtons = role === roles.MEMBER ? [] : setupHubButtons;
+  const visibleMoreHubButtons = role === roles.MEMBER
+    ? moreHubButtons.filter((item) => item.to !== "/product-owner")
+    : moreHubButtons.filter((item) => item.to !== "/product-owner" || role === roles.PRODUCT_OWNER);
+  const bottomNavItems = role === roles.MEMBER
+    ? [
+        { to: "/home", Icon: Home, label: "Home" },
+        { to: "/transactions-hub", Icon: ArrowRightLeft, label: "Transactions" },
+        { to: "/profile", Icon: User, label: "Profile" },
+        { to: "/more", Icon: MoreHorizontal, label: "More" }
+      ]
+    : [
+        { to: "/home", Icon: Home, label: "Home" },
+        { to: "/transactions-hub", Icon: ArrowRightLeft, label: "Transactions" },
+        { to: "/setup-hub", Icon: Settings, label: "Setup" },
+        { to: "/profile", Icon: User, label: "Profile" },
+        { to: "/more", Icon: MoreHorizontal, label: "More" }
+      ];
   const memberPortalActive = role !== roles.MEMBER && new URLSearchParams(location.search).get("portal") === "member";
   const scopedState = getSelectedGroupState(state, selectedGroup?.id, false);
   const viewState = getStateWithComputedShares(scopedState);
@@ -760,29 +723,10 @@ function App() {
         <div className="brand">
           <div className="brand-mark">BG</div>
           <div className="brand-copy">
-            <strong>Bachat Gat</strong>
-            <span className="brand-group-line">
-              <span>{selectedGroup?.name ?? "No group selected"}</span>
-              <button
-                type="button"
-                className="brand-switch"
-                onClick={() => {
-                  if (isProductOwner) {
-                    setMobileNavOpen(false);
-                    navigate("/select-group");
-                    return;
-                  }
-                  setSelectedGroupId(null);
-                  setMobileNavOpen(false);
-                  navigate("/select-group");
-                }}
-              >
-                Switch
-              </button>
-              {/* Refresh button removed — refresh flow handled elsewhere */}
-            </span>
-            {selectedGroup?.code && <small>{selectedGroup.code}</small>}
-            
+            <strong>
+              {selectedGroup?.name ?? "No group selected"}
+              {selectedGroup?.code && <small className="brand-code">{selectedGroup.code}</small>}
+            </strong>
           </div>
         </div>
 
@@ -857,18 +801,7 @@ function App() {
               <h1>प्रगती (Finance Console)</h1>
               <div className="group-header">
                 <span>{selectedGroup?.name ?? "No group selected"}</span>
-                <button type="button" className="switch-button" onClick={() => {
-                  if (isProductOwner) {
-                    setMobileNavOpen(false);
-                    navigate("/select-group");
-                    return;
-                  }
-                  setSelectedGroupId(null);
-                  setMobileNavOpen(false);
-                  navigate("/select-group");
-                }}>
-                  Switch
-                </button>
+                {selectedGroup?.code && <small className="brand-code">{selectedGroup.code}</small>}
               </div>
             </div>
           </div>
@@ -955,75 +888,61 @@ function App() {
         <Routes>
           <Route path="/select-group" element={<GroupSelectionPage state={state} setState={patchState} selectedGroupId={selectedGroupId} setSelectedGroupId={setSelectedGroupId} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
           <Route path="/" element={<Navigate replace to="/home" />} />
-          <Route path="/home" element={<HubGridPage title="Home" items={homeHubButtons} />} />
-          <Route path="/transactions-hub" element={<HubGridPage title="Transactions" items={transactionsHubButtons} />} />
-          <Route path="/setup-hub" element={<HubGridPage title="Setup" items={setupHubButtons} />} />
-          <Route path="/more" element={<HubGridPage title="More" items={moreHubButtons} />} />
+          <Route path="/home" element={<HubGridPage title="Home" items={visibleHomeHubButtons} />} />
+          <Route path="/transactions-hub" element={<HubGridPage title="Transactions" items={visibleTransactionsHubButtons} />} />
+          <Route path="/setup-hub" element={role === roles.MEMBER ? <Navigate replace to="/home" /> : <HubGridPage title="Setup" items={visibleSetupHubButtons} />} />
+          <Route path="/more" element={<HubGridPage title="More" items={visibleMoreHubButtons} />} />
           <Route path="/dashboard/group" element={<Dashboard role={role} state={visibleViewState} actor={{ ...state.session.user, role }} forceGroupView setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
           <Route path="/dashboard/member" element={<Dashboard role={role} state={visibleViewState} actor={{ ...state.session.user, role }} memberPortal setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
           <Route path="/group-dashboard" element={<Dashboard role={role} state={visibleViewState} actor={{ ...state.session.user, role }} forceGroupView setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
           <Route path="/my-savings" element={<MemberSavings state={visibleViewState} actor={{ ...state.session.user, role }} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
           <Route path="/my-loans" element={<MemberLoans state={visibleViewState} actor={{ ...state.session.user, role }} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
           <Route path="/notifications" element={<MemberNotifications state={visibleViewState} actor={{ ...state.session.user, role }} setState={patchState} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
-          <Route path="/profile" element={<MemberProfile state={viewState} setState={patchState} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
-          <Route path="/members" element={<Members state={viewState} setState={patchState} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
-          <Route path="/setup" element={<SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} ensureLatestTenantData={ensureLatestTenantData} />} />
+          <Route path="/profile" element={<MemberProfile state={viewState} setState={patchState} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} signOut={signOut} />} />
+          <Route path="/members" element={role === roles.MEMBER ? <Navigate replace to="/home" /> : <Members state={viewState} setState={patchState} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
+          <Route path="/setup" element={role === roles.MEMBER ? <Navigate replace to="/home" /> : <SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} ensureLatestTenantData={ensureLatestTenantData} />} />
           <Route path="/subscriptions" element={<Subscriptions state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
-          <Route path="/periods" element={<Periods state={viewState} setState={patchState} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
-          <Route path="/transactions" element={<Transactions state={viewState} setState={patchState} actor={state.session.user} setSelectedGroupId={setSelectedGroupId} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
-          <Route path="/operations/transactions" element={<Transactions state={viewState} setState={patchState} actor={state.session.user} setSelectedGroupId={setSelectedGroupId} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
+          <Route path="/periods" element={role === roles.MEMBER ? <Navigate replace to="/home" /> : <Periods state={viewState} setState={patchState} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
+          <Route path="/transactions" element={role === roles.MEMBER ? <Navigate replace to="/transactions-hub" /> : <Transactions state={viewState} setState={patchState} actor={state.session.user} setSelectedGroupId={setSelectedGroupId} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
+          <Route path="/operations/transactions" element={role === roles.MEMBER ? <Navigate replace to="/transactions-hub" /> : <Transactions state={viewState} setState={patchState} actor={state.session.user} setSelectedGroupId={setSelectedGroupId} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
           <Route path="/withdrawals" element={<Withdrawals state={visibleViewState} setState={patchState} actor={{ ...state.session.user, role }} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
           <Route path="/operations/withdrawals" element={<Withdrawals state={visibleViewState} setState={patchState} actor={{ ...state.session.user, role }} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
           <Route path="/pending-dues" element={<PendingDues state={visibleViewState} setState={patchState} actor={{ ...state.session.user, role }} setNotification={setNotification} />} />
-          <Route path="/ai-agent" element={<FinanceAgent state={visibleViewState} actor={{ ...state.session.user, role }} setNotification={setNotification} />} />
-          <Route path="/corrections" element={<Corrections state={viewState} setState={patchState} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
-          <Route path="/corrections/adjustments" element={<Adjustments state={viewState} setState={patchState} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
-          <Route path="/corrections/reversals" element={<Reversals state={viewState} setState={patchState} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
-          <Route path="/corrections/waivers" element={<Waivers state={viewState} setState={patchState} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
-          <Route path="/adjustments" element={<Adjustments state={viewState} setState={patchState} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
-          <Route path="/reversals" element={<Reversals state={viewState} setState={patchState} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
-          <Route path="/audit-history" element={<Reports state={viewState} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
+          <Route path="/ai-agent" element={role === roles.MEMBER ? <Navigate replace to="/home" /> : <FinanceAgent state={visibleViewState} actor={{ ...state.session.user, role }} setNotification={setNotification} />} />
+          <Route path="/corrections" element={role === roles.MEMBER ? <Navigate replace to="/home" /> : <Corrections state={viewState} setState={patchState} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
+          <Route path="/corrections/adjustments" element={role === roles.MEMBER ? <Navigate replace to="/home" /> : <Adjustments state={viewState} setState={patchState} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
+          <Route path="/corrections/reversals" element={role === roles.MEMBER ? <Navigate replace to="/home" /> : <Reversals state={viewState} setState={patchState} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
+          <Route path="/corrections/waivers" element={role === roles.MEMBER ? <Navigate replace to="/home" /> : <Waivers state={viewState} setState={patchState} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
+          <Route path="/adjustments" element={role === roles.MEMBER ? <Navigate replace to="/home" /> : <Adjustments state={viewState} setState={patchState} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
+          <Route path="/reversals" element={role === roles.MEMBER ? <Navigate replace to="/home" /> : <Reversals state={viewState} setState={patchState} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
+          <Route path="/audit-history" element={role === roles.MEMBER ? <Navigate replace to="/home" /> : <Reports state={viewState} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
           <Route path="/loans" element={<Loans state={visibleViewState} setState={patchState} actor={{ ...state.session.user, role }} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
           <Route path="/operations/loans" element={<Loans state={visibleViewState} setState={patchState} actor={{ ...state.session.user, role }} setConfirmDialog={setConfirmDialog} setNotification={setNotification} ensureLatestTenantData={ensureLatestTenantData} />} />
           <Route path="/approvals" element={<Approvals state={viewState} setState={patchState} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
           <Route path="/reports" element={<Reports state={viewState} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
           <Route path="/contact-support" element={<ContactSupport state={viewState} setState={patchState} actor={state.session.user} setNotification={setNotification} />} />
-          <Route path="/product-owner" element={<ProductOwnerSupport state={state} setState={patchState} selectedGroupId={selectedGroupId} setSelectedGroupId={setSelectedGroupId} setNotification={setNotification} />} />
-          <Route path="/settings" element={<SettingsPage state={viewState} setState={patchState} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
-          <Route path="/setup/group" element={<SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="group" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} ensureLatestTenantData={ensureLatestTenantData} />} />
-          <Route path="/setup/member" element={<SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="member" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} ensureLatestTenantData={ensureLatestTenantData} />} />
-          <Route path="/setup/financial" element={<SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="financial" initialFinancialTab="approvers" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} ensureLatestTenantData={ensureLatestTenantData} />} />
-          <Route path="/setup/approval" element={<SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="financial" initialFinancialTab="approvers" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} ensureLatestTenantData={ensureLatestTenantData} />} />
-          <Route path="/setup/loan" element={<SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="financial" initialFinancialTab="loan" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} ensureLatestTenantData={ensureLatestTenantData} />} />
-          <Route path="/setup/periods" element={<SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="financial" initialFinancialTab="period" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} ensureLatestTenantData={ensureLatestTenantData} />} />
-          <Route path="/setup/roles" element={<SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="financial" initialFinancialTab="roles" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} ensureLatestTenantData={ensureLatestTenantData} />} />
-          <Route path="/setup/calculator" element={<SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="financial" initialFinancialTab="calculator" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} ensureLatestTenantData={ensureLatestTenantData} />} />
-          <Route path="/setup/legacy" element={<SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="financial" initialFinancialTab="calculator" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} ensureLatestTenantData={ensureLatestTenantData} />} />
+          <Route path="/product-owner" element={role === roles.PRODUCT_OWNER ? <ProductOwnerSupport state={state} setState={patchState} selectedGroupId={selectedGroupId} setSelectedGroupId={setSelectedGroupId} setNotification={setNotification} /> : <Navigate replace to="/home" />} />
+          <Route path="/settings" element={role === roles.MEMBER ? <Navigate replace to="/home" /> : <SettingsPage state={viewState} setState={patchState} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
+          <Route path="/setup/group" element={role === roles.MEMBER ? <Navigate replace to="/home" /> : <SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="group" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} ensureLatestTenantData={ensureLatestTenantData} />} />
+          <Route path="/setup/member" element={role === roles.MEMBER ? <Navigate replace to="/home" /> : <SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="member" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} ensureLatestTenantData={ensureLatestTenantData} />} />
+          <Route path="/setup/financial" element={role === roles.MEMBER ? <Navigate replace to="/home" /> : <SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="financial" initialFinancialTab="approvers" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} ensureLatestTenantData={ensureLatestTenantData} />} />
+          <Route path="/setup/approval" element={role === roles.MEMBER ? <Navigate replace to="/home" /> : <SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="financial" initialFinancialTab="approvers" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} ensureLatestTenantData={ensureLatestTenantData} />} />
+          <Route path="/setup/loan" element={role === roles.MEMBER ? <Navigate replace to="/home" /> : <SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="financial" initialFinancialTab="loan" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} ensureLatestTenantData={ensureLatestTenantData} />} />
+          <Route path="/setup/periods" element={role === roles.MEMBER ? <Navigate replace to="/home" /> : <SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="financial" initialFinancialTab="period" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} ensureLatestTenantData={ensureLatestTenantData} />} />
+          <Route path="/setup/roles" element={role === roles.MEMBER ? <Navigate replace to="/home" /> : <SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="financial" initialFinancialTab="roles" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} ensureLatestTenantData={ensureLatestTenantData} />} />
+          <Route path="/setup/calculator" element={role === roles.MEMBER ? <Navigate replace to="/home" /> : <SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="financial" initialFinancialTab="calculator" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} ensureLatestTenantData={ensureLatestTenantData} />} />
+          <Route path="/setup/legacy" element={role === roles.MEMBER ? <Navigate replace to="/home" /> : <SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="financial" initialFinancialTab="calculator" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} ensureLatestTenantData={ensureLatestTenantData} />} />
           <Route path="/guide" element={<GuidePage insideApp />} />
           <Route path="*" element={<Dashboard role={role} state={viewState} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
         </Routes>
       </main>
       <nav className="bottom-nav" aria-label="Primary navigation">
-        <NavLink className="bottom-nav-item" to="/home">
-          <Home size={20} />
-          <span>Home</span>
-        </NavLink>
-        <NavLink className="bottom-nav-item" to="/transactions-hub">
-          <ArrowRightLeft size={20} />
-          <span>Transactions</span>
-        </NavLink>
-        <NavLink className="bottom-nav-item" to="/setup-hub">
-          <Settings size={20} />
-          <span>Setup</span>
-        </NavLink>
-        <NavLink className="bottom-nav-item" to="/profile">
-          <User size={20} />
-          <span>Profile</span>
-        </NavLink>
-        <NavLink className="bottom-nav-item" to="/more">
-          <MoreHorizontal size={20} />
-          <span>More</span>
-        </NavLink>
+        {bottomNavItems.map(({ to, Icon, label }) => (
+          <NavLink key={to} className="bottom-nav-item" to={to}>
+            <Icon size={20} />
+            <span>{label}</span>
+          </NavLink>
+        ))}
       </nav>
       {previewMember && (
         <div className="modal-overlay" onClick={() => setPreviewMember(null)}>
@@ -2028,7 +1947,16 @@ function StatusScreen({ title, message }) {
 
 function Dashboard({ role, state, actor, forceGroupView = false, memberPortal = false, setConfirmDialog, setNotification }) {
   const navigate = useNavigate();
-  const [selectedDashboardMemberId, setSelectedDashboardMemberId] = useState("");
+  const [selectedDashboardMemberId, setSelectedDashboardMemberId] = useState(() => {
+    const currentMember = getCurrentMember(state, actor);
+    return String(currentMember?.id ?? state.members?.[0]?.id ?? "");
+  });
+  useEffect(() => {
+    if (!selectedDashboardMemberId) {
+      const currentMember = getCurrentMember(state, actor);
+      setSelectedDashboardMemberId(String(currentMember?.id ?? state.members?.[0]?.id ?? ""));
+    }
+  }, [state.members, actor, selectedDashboardMemberId]);
   const dashboardPeriod = getDashboardPeriod(state);
   const dashboardCards = calculateDashboardCards(state, dashboardPeriod).cards;
   const memberFields = financeFieldDictionary.member;
@@ -2040,10 +1968,8 @@ function Dashboard({ role, state, actor, forceGroupView = false, memberPortal = 
   const financialPeriodLabel = `${financialPeriodStart.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} - ${financialDueDate.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`;
 
   if ((role === roles.MEMBER || memberPortal) && !forceGroupView) {
-    const canChooseMember = role !== roles.MEMBER;
-    const member = canChooseMember
-      ? (state.members.find((item) => String(item.id) === String(selectedDashboardMemberId)) ?? state.members[0])
-      : (getCurrentMember(state, actor) ?? { savings: 0, loanOutstanding: 0, shares: 0, interestOutstanding: 0, penaltyOutstanding: 0 });
+    const canChooseMember = true;
+    const member = state.members.find((item) => String(item.id) === String(selectedDashboardMemberId)) ?? getCurrentMember(state, actor) ?? { savings: 0, loanOutstanding: 0, shares: 0, interestOutstanding: 0, penaltyOutstanding: 0 };
     const memberDashboard = calculateMemberDashboardCards(member, state, dashboardPeriod, actor);
     const memberSummary = memberDashboard.summary;
     const memberCards = memberDashboard.cards;
@@ -2075,11 +2001,16 @@ function Dashboard({ role, state, actor, forceGroupView = false, memberPortal = 
       <Page title={canChooseMember ? "Member Dashboard" : "My Dashboard"} subtitle="Savings, loans, repayments, shares and notifications" action={null}>
         {canChooseMember && (
           <Section title="Select member">
-            <SelectField
+            <ComboField
               label="Member"
               value={member?.id ?? ""}
               onChange={setSelectedDashboardMemberId}
-              options={state.members.map((item) => ({ label: item.fullName, value: item.id }))}
+              placeholder="Search member by name, email or mobile"
+              options={state.members.map((item) => ({
+                label: item.fullName,
+                value: item.id,
+                code: [item.fullName, item.email, item.mobile, item.username].filter(Boolean).join(" ")
+              }))}
             />
           </Section>
         )}
@@ -5540,18 +5471,6 @@ function Transactions({ state, setState, actor, setSelectedGroupId, setConfirmDi
     .filter((item) => isPendingOrRecentCompleted(item, "transactionDate", 60))
     .sort((a, b) => String(b.transactionDate).localeCompare(String(a.transactionDate)));
   
-  // Debug: Check what transactions are visible for Ajinkya
-  const ajinkyaAllTrx = state.transactions?.filter(t => t.memberId === 57) || [];
-  const ajinkyaVisibleTrx = visibleTransactionRows.filter(t => t.memberId === 57) || [];
-  if (ajinkyaAllTrx.length > 0) {
-    console.log("📋 AJINKYA TRANSACTION VISIBILITY:");
-    console.log(`   All transactions for Ajinkya: ${ajinkyaAllTrx.length}`);
-    ajinkyaAllTrx.forEach(t => {
-      const isVisible = ajinkyaVisibleTrx.some(v => v.id === t.id);
-      const isPending = isPendingOrRecentCompleted(t, "transactionDate", 60);
-      console.log(`   ID=${t.id}, Date=${t.transactionDate}, Type=${t.transactionType}, Status=${t.approvalStatus}, Visible=${isVisible}, PassesFilter=${isPending}`);
-    });
-  }
   
   // Add fallback for periods
   const periodsData = Array.isArray(state.periods) ? state.periods : [];
@@ -5560,19 +5479,12 @@ function Transactions({ state, setState, actor, setSelectedGroupId, setConfirmDi
   const isGroupExpense = values.memberId === GROUP_EXPENSE_MEMBER_ID;
   let member = isGroupExpense ? null : state.members.find((item) => String(item.id) === String(values.memberId));
   
-  // Debug: Check transaction ID=86 date
   const trx86 = state.transactions?.find(t => t.id === 86);
   if (trx86) {
     const sixtyDaysAgo = new Date();
     sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
     const trx86Date = new Date(trx86.transactionDate);
     const isPast60 = trx86Date < sixtyDaysAgo;
-    console.log("🔍 Transaction ID=86 date verification:");
-    console.log(`   Date: ${trx86.transactionDate}, Parsed: ${trx86Date.toISOString()}`);
-    console.log(`   Today: ${new Date().toISOString()}`);
-    console.log(`   60 days ago: ${sixtyDaysAgo.toISOString()}`);
-    console.log(`   Is older than 60 days? ${isPast60}`);
-    console.log(`   isPendingOrRecentCompleted? ${isPendingOrRecentCompleted(trx86, "transactionDate", 60)}`);
   }
   
   const memberActiveLoans = state.loans
@@ -8773,18 +8685,11 @@ function NotificationList({ notifications }) {
 function Page({ title, subtitle, action, children }) {
   return (
     <section className="page">
-      <div className="page-heading">
-        <div>
-          <h2>{bilingual(title)}</h2>
-          <p>{subtitle}</p>
-        </div>
+      {action && (
         <div className="page-actions">
           {action}
-          <button type="button" className="secondary-button" onClick={() => window.location.reload()}>
-            Refresh
-          </button>
         </div>
-      </div>
+      )}
       {children}
     </section>
   );
@@ -8839,7 +8744,6 @@ function Section({ title, children }) {
 function FormCard({ title, onSubmit, children, hideSubmit }) {
   return (
     <section className="section">
-      <h3>{bilingual(title)}</h3>
       <form className="form-grid" onSubmit={onSubmit}>
         {children}
         {!hideSubmit && <button className="primary-button" type="submit">Save</button>}
@@ -8866,7 +8770,7 @@ function Field({ label, value, onChange, type = "text", error, required = false,
   );
 }
 
-function SelectField({ label, value, onChange, options, error, required = false }) {
+function SelectField({ label, value, onChange, options, error, required = false, placeholder = "" }) {
   return (
     <label className="field">
       <span>{bilingual(label)}{required ? " *" : " (Optional)"}</span>
@@ -9070,7 +8974,7 @@ function MemberNotifications({ state, setState, actor, setConfirmDialog, setNoti
   );
 }
 
-function MemberProfile({ state, setState, actor, setConfirmDialog, setNotification }) {
+function MemberProfile({ state, setState, actor, setConfirmDialog, setNotification, signOut }) {
   const navigate = useNavigate();
   const member = (state.members || []).find((item) =>
     String(item.id) === String(actor?.memberId)
@@ -9142,6 +9046,9 @@ function MemberProfile({ state, setState, actor, setConfirmDialog, setNotificati
           </label>
           <button type="button" className="secondary-button" onClick={() => navigate("/select-group")}>
             Switch group
+          </button>
+          <button type="button" className="secondary-button" onClick={signOut}>
+            Logout
           </button>
         </div>
       </Section>

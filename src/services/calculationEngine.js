@@ -366,16 +366,9 @@ export function calculateEventBasedShareDistribution({ members = [], transaction
   });
   const effectiveTransactions = transactionsForShareDistribution(completedTransactions);
 
-  console.log(`[ShareDistribution] Period: ${period.name} (${periodStart.toISOString().split('T')[0]} to ${periodEnd.toISOString().split('T')[0]})`);
-  console.log(`[ShareDistribution] Input transactions: ${transactions.length}, Completed: ${completedTransactions.length}, Effective: ${effectiveTransactions.length}`);
-  
   const relevantTransactions = effectiveTransactions.filter((transaction) => {
     const date = parseDate(transaction.transactionDate);
     return date && dateOnly(date) >= periodStart && dateOnly(date) <= periodEnd;
-  });
-  console.log(`[ShareDistribution] Transactions in period: ${relevantTransactions.length}`);
-  relevantTransactions.forEach(t => {
-    console.log(`  - ${t.transactionType}: ${t.amount}, allocation.interest: ${t.allocation?.interest}, date: ${t.transactionDate}`);
   });
 
   const resultByMember = Object.fromEntries(members.map((member) => [member.id, {
@@ -411,41 +404,23 @@ export function calculateEventBasedShareDistribution({ members = [], transaction
       }
 
       if (interestAmount > 0) {
-        console.log(`[ShareDistribution] Processing interest ${interestAmount} from borrower ${transaction.memberId}`);
         const borrowerLoans = loans
           .filter((loan) => String(loan.memberId) === String(transaction.memberId))
           .filter((loan) => parseDate(loan.startDate ?? loan.distributionDate) && dateOnly(parseDate(loan.startDate ?? loan.distributionDate)) <= trxDate)
           .sort((a, b) => parseDate(a.startDate ?? a.distributionDate) - parseDate(b.startDate ?? b.distributionDate));
-        console.log(`[ShareDistribution]   Total loans for borrower ${transaction.memberId}: ${loans.filter((loan) => String(loan.memberId) === String(transaction.memberId)).length}, Filtered: ${borrowerLoans.length}`);
         const loan = borrowerLoans[0];
-        console.log(`[ShareDistribution]   Transaction date: ${trxDate.toISOString().split('T')[0]}, Has loan: ${!!loan}`);
         const eligibleMembers = members.filter((member) => isEligibleForShareOnDate(member, trxDate));
-        console.log(`[ShareDistribution]   All members: ${members.length}, Eligible for share on date: ${eligibleMembers.length}`);
-        if (eligibleMembers.length === 0) {
-          console.log(`[ShareDistribution]   WARNING: No eligible members found. All members on ${loanDate.toISOString().split('T')[0]}:`);
-          members.forEach(m => {
-            const joined = parseDate(m.dateJoined ?? m.joinDate ?? m.createdAt);
-            const exit = parseDate(m.exitDate ?? m.inactiveDate);
-            console.log(`     - ${m.fullName}: status=${m.status}, joined=${joined?.toISOString().split('T')[0]}, exit=${exit?.toISOString().split('T')[0]}`);
-          });
-        }
-        const weightedRows = eligibleMembers.map((member) => {
-          console.log(`[ShareDistribution]     Member ${member.fullName}: sharing equally`);
-          return {
-            member,
-            memberId: member.id,
-            memberName: member.fullName,
-            savingAmount: Number(member.savings || 0),
-            daysActive: 1,
-            shareWeight: 1
-          };
-        });
-
-        console.log(`[ShareDistribution]   Members with weight > 0: ${weightedRows.length}`);
+        const weightedRows = eligibleMembers.map((member) => ({
+          member,
+          memberId: member.id,
+          memberName: member.fullName,
+          savingAmount: Number(member.savings || 0),
+          daysActive: 1,
+          shareWeight: 1
+        }));
 
         allocatePoolByWeights(weightedRows, interestAmount).forEach((row) => {
           if (!resultByMember[row.memberId]) return;
-          console.log(`[ShareDistribution]   Allocated ${row.shareAmount} to ${row.memberName}`);
           resultByMember[row.memberId].shareAmount += row.shareAmount;
           resultByMember[row.memberId].interestShare += row.shareAmount;
           resultByMember[row.memberId].shareWeight += row.shareWeight;

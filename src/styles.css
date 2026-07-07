@@ -72,19 +72,16 @@ select,
   font-weight: 700;
 }
 
-.switch-button {
-  border: 1px solid rgba(16, 35, 63, 0.12);
+.brand-code {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
   border-radius: 999px;
-  background: #ffffff;
-  color: var(--ink);
-  font-size: 0.95rem;
-  font-weight: 700;
-  padding: 10px 16px;
-  box-shadow: 0 8px 24px rgba(16, 35, 63, 0.08);
-}
-
-.switch-button:hover {
   background: rgba(15, 118, 110, 0.08);
+  color: var(--ink);
+  font-size: 0.9rem;
+  font-weight: 700;
 }
 
 .sidebar {
@@ -130,10 +127,23 @@ select,
   min-width: 0;
 }
 
-.brand span {
+.brand-copy strong {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.brand span,
+.brand-code {
   color: #475569;
   font-size: 0.85rem;
-  margin-top: 2px;
+}
+
+.brand-code {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .brand-group-line {
@@ -581,7 +591,31 @@ select,
 
 @media (max-width: 680px) {
   .hub-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .hub-tile {
+    min-height: 120px;
+    padding: 14px;
+    gap: 10px;
+    border-radius: 20px;
+  }
+
+  .hub-tile-icon {
+    width: 56px;
+    height: 56px;
+  }
+
+  .hub-tile span {
+    font-size: 0.95rem;
+    line-height: 1.2;
+  }
+
+  .button-row button {
+    flex: 1 1 calc(50% - 8px);
+    min-width: 0;
+    max-width: 100%;
   }
 }
 
@@ -1968,6 +2002,17 @@ button.secondary-button {
     min-width: 0;
   }
 
+  .button-row {
+    gap: 6px;
+  }
+
+  .button-row button {
+    flex: 1 1 calc(50% - 6px);
+    min-width: 0;
+    padding: 0 8px;
+    font-size: 0.92rem;
+  }
+
   .page-heading {
     align-items: flex-start;
     flex-direction: column;
@@ -2789,6 +2834,19 @@ button,
 /* Hide page subtitles across the app (remove extra descriptive lines under headers) */
 .page-heading p {
   display: none !important;
+}
+
+@media (max-width: 680px) {
+  .hub-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px;
+  }
+
+  .button-row button {
+    flex: 1 1 calc(50% - 8px) !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
 }
 
 /* Keep primary CTA slightly larger for prominence */

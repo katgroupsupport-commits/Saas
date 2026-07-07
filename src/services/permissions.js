@@ -97,16 +97,10 @@ export function visibleMenu(role) {
 
   if (role === roles.MEMBER) {
     return [
-      { path: "/", label: "My Dashboard" },
-      { path: "/my-savings", label: "My Savings" },
-      { path: "/loans", label: "Request Loan" },
-      { path: "/withdrawals", label: "Request Withdrawal" },
-      { path: "/pending-dues", label: "Pending Dues" },
-      { path: "/my-loans", label: "My Loans" },
-      { path: "/notifications", label: "Notifications" },
-      { path: "/approvals", label: "Approvals" },
-      { path: "/reports", label: "Reports & Audit" },
-      { path: "/contact-support", label: "Contact" }
+      { path: "/home", label: "Home" },
+      { path: "/transactions-hub", label: "Transactions" },
+      { path: "/profile", label: "Profile" },
+      { path: "/more", label: "More" }
     ];
   }
 

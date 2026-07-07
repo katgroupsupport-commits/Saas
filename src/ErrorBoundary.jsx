@@ -18,9 +18,6 @@ export default class ErrorBoundary extends React.Component {
             <p className="eyebrow">Bachat Gat SaaS</p>
             <h1>App startup error</h1>
             <p>{this.state.error.message}</p>
-            <button className="primary-button" type="button" onClick={() => window.location.reload()}>
-              Reload
-            </button>
           </section>
         </main>
       );

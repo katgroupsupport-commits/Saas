@@ -90,16 +90,6 @@ export function getCompletedTransactions(transactions = []) {
   const completed = transactions.filter((transaction) => isCompletedFinancialStatus(transaction.approvalStatus ?? transaction.approval_status)
     || isCorrectionTransaction(transaction));
   
-  // Debug: Check why ID=86 is included in raw transactions but not showing in UI
-  const id86 = transactions.find(t => t.id === 86);
-  if (id86) {
-    console.log("🔍 Transaction ID=86 status check:");
-    console.log(`   approvalStatus: "${id86.approvalStatus}", approval_status: "${id86.approval_status}"`);
-    console.log(`   isCompletedFinancialStatus: ${isCompletedFinancialStatus(id86.approvalStatus ?? id86.approval_status)}`);
-    console.log(`   isCorrectionTransaction: ${isCorrectionTransaction(id86)}`);
-    console.log(`   Will be included in completed? ${completed.some(t => t.id === 86)}`);
-  }
-  
   return completed;
 }
 
@@ -129,14 +119,7 @@ export function getEffectiveCompletedTransactions(transactions = [], untilDate =
     return isReversal;
   });
   
-  // Debug Ajinkya's reversal detection
   const ajinkyaReversals = reversalCandidates.filter(t => t.memberId === 57);
-  if (ajinkyaReversals.length > 0) {
-    console.log("🔍 DEBUG: Reversals for Ajinkya (ID 57):");
-    ajinkyaReversals.forEach(rev => {
-      console.log(`   - Reversal ID: ${rev.id}, Parent ID: ${rev.parentTransactionId}, trxNumber: "${rev.transactionNumber}", reversedFlag: "${rev.reversedFlag}", amount: ${rev.amount}`);
-    });
-  }
   
   const childParentIds = new Set(reversalCandidates
     .filter((transaction) => String(transaction.parentTransactionId || "").trim())
@@ -145,7 +128,6 @@ export function getEffectiveCompletedTransactions(transactions = [], untilDate =
   if (childParentIds.size > 0) {
     const ajinkyaInParents = reversalCandidates.filter(t => t.memberId === 57 && String(t.parentTransactionId || "").trim());
     if (ajinkyaInParents.length > 0) {
-      console.log(`📌 Parent IDs to be filtered: ${Array.from(childParentIds).join(", ")}`);
     }
   }
   
@@ -170,11 +152,7 @@ export function getEffectiveCompletedTransactions(transactions = [], untilDate =
     return true;
   });
   
-  // Debug Ajinkya's effective transactions
   const ajinkyaEffective = effectiveResult.filter(t => t.memberId === 57);
-  if (ajinkyaEffective.length > 0 && ajinkyaReversals.length > 0) {
-    console.log("✅ AFTER FILTER: Ajinkya effective transactions count:", ajinkyaEffective.length, "Total effective:", effectiveResult.length);
-  }
   
   return effectiveResult;
 }
@@ -711,19 +689,6 @@ export function calculateMemberLedgerSummary(member, state) {
   const memberTransactions = completedTransactions.filter((transaction) => String(transaction.memberId) === String(member?.id));
   const rawMemberTransactions = rawTransactions.filter((transaction) => String(transaction.memberId) === String(member?.id));
   
-  // Debug Ajinkya's ledger
-  if (member?.id === 57) {
-    console.log("📊 AJINKYA LEDGER DEBUG:");
-    console.log(`   Raw transactions count: ${rawMemberTransactions.length}`);
-    console.log(`   Effective transactions count: ${memberTransactions.length}`);
-    memberTransactions.forEach((trx, idx) => {
-      console.log(`   Effective Trx ${idx + 1}: ID=${trx.id}, Type=${trx.transactionType}, Amount=${trx.amount}, Allocation.savings=${trx.allocation?.savings}, Allocation.excess=${trx.allocation?.excess}`);
-    });
-    rawMemberTransactions.forEach((trx, idx) => {
-      console.log(`   Raw Trx ${idx + 1}: ID=${trx.id}, Type=${trx.transactionType}, Amount=${trx.amount}, Allocation.savings=${trx.allocation?.savings}, Allocation.excess=${trx.allocation?.excess}, IsReversal=${String(trx.reversedFlag) === 'Y' || String(trx.transactionNumber).startsWith('REV')}`);
-    });
-  }
-  
   let savings = memberTransactions
     .filter((transaction) => transaction.transactionType !== "Group Expense Share")
     .reduce((sum, transaction) =>
@@ -734,10 +699,6 @@ export function calculateMemberLedgerSummary(member, state) {
   );
   if (!hasSavingsLedger && Number(member?.savings || 0) > 0) {
     savings = Number(member.savings || 0);
-  }
-  
-  if (member?.id === 57) {
-    console.log(`   Calculated savings: ${savings}, hasSavingsLedger: ${hasSavingsLedger}, member.savings: ${member.savings}`);
   }
   
   const expense = Math.abs(memberTransactions
