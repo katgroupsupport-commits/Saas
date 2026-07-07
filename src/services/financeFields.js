@@ -78,8 +78,105 @@ export function isCompletedFinancialStatus(status) {
   return ["COMPLETED", "APPROVED"].includes(String(status ?? "").toUpperCase());
 }
 
+function isCorrectionTransaction(transaction) {
+  const isReversal = String(transaction?.reversedFlag || "").toUpperCase() === "Y"
+    || String(transaction?.transactionNumber || "").startsWith("REV");
+  const isAdjustment = String(transaction?.adjustmentFlag || "").toUpperCase() === "Y"
+    || String(transaction?.transactionNumber || "").startsWith("ADJ");
+  return isReversal || isAdjustment;
+}
+
 export function getCompletedTransactions(transactions = []) {
-  return transactions.filter((transaction) => isCompletedFinancialStatus(transaction.approvalStatus ?? transaction.approval_status));
+  const completed = transactions.filter((transaction) => isCompletedFinancialStatus(transaction.approvalStatus ?? transaction.approval_status)
+    || isCorrectionTransaction(transaction));
+  
+  // Debug: Check why ID=86 is included in raw transactions but not showing in UI
+  const id86 = transactions.find(t => t.id === 86);
+  if (id86) {
+    console.log("🔍 Transaction ID=86 status check:");
+    console.log(`   approvalStatus: "${id86.approvalStatus}", approval_status: "${id86.approval_status}"`);
+    console.log(`   isCompletedFinancialStatus: ${isCompletedFinancialStatus(id86.approvalStatus ?? id86.approval_status)}`);
+    console.log(`   isCorrectionTransaction: ${isCorrectionTransaction(id86)}`);
+    console.log(`   Will be included in completed? ${completed.some(t => t.id === 86)}`);
+  }
+  
+  return completed;
+}
+
+function transactionReversalSignature(transaction) {
+  return [
+    String(transaction.memberId ?? ""),
+    String(transaction.transactionType ?? ""),
+    String(transaction.transactionDate ?? ""),
+    Math.abs(Number(transaction.amount || 0)),
+    Math.abs(Number(transaction.allocation?.savings || 0)),
+    Math.abs(Number(transaction.allocation?.excess || 0)),
+    Math.abs(Number(transaction.allocation?.principal || 0)),
+    Math.abs(Number(transaction.allocation?.interest || 0)),
+    Math.abs(Number(transaction.allocation?.penalty || 0))
+  ].join("|");
+}
+
+export function getEffectiveCompletedTransactions(transactions = [], untilDate = null) {
+  const filteredTransactions = (transactions || []).filter((transaction) => {
+    if (!untilDate) return true;
+    return String(transaction.transactionDate || "") <= String(untilDate);
+  });
+  
+  const reversalCandidates = filteredTransactions.filter((transaction) => {
+    const isReversal = String(transaction.reversedFlag || "").toUpperCase() === "Y"
+      || String(transaction.transactionNumber || "").startsWith("REV");
+    return isReversal;
+  });
+  
+  // Debug Ajinkya's reversal detection
+  const ajinkyaReversals = reversalCandidates.filter(t => t.memberId === 57);
+  if (ajinkyaReversals.length > 0) {
+    console.log("🔍 DEBUG: Reversals for Ajinkya (ID 57):");
+    ajinkyaReversals.forEach(rev => {
+      console.log(`   - Reversal ID: ${rev.id}, Parent ID: ${rev.parentTransactionId}, trxNumber: "${rev.transactionNumber}", reversedFlag: "${rev.reversedFlag}", amount: ${rev.amount}`);
+    });
+  }
+  
+  const childParentIds = new Set(reversalCandidates
+    .filter((transaction) => String(transaction.parentTransactionId || "").trim())
+    .map((transaction) => String(transaction.parentTransactionId)));
+  
+  if (childParentIds.size > 0) {
+    const ajinkyaInParents = reversalCandidates.filter(t => t.memberId === 57 && String(t.parentTransactionId || "").trim());
+    if (ajinkyaInParents.length > 0) {
+      console.log(`📌 Parent IDs to be filtered: ${Array.from(childParentIds).join(", ")}`);
+    }
+  }
+  
+  const orphanedReversalCounts = reversalCandidates
+    .filter((transaction) => !String(transaction.parentTransactionId || "").trim())
+    .reduce((counts, transaction) => {
+      const signature = transactionReversalSignature(transaction);
+      counts[signature] = (counts[signature] || 0) + 1;
+      return counts;
+    }, {});
+
+  const effectiveResult = filteredTransactions.filter((transaction) => {
+    const isReversal = String(transaction.reversedFlag || "").toUpperCase() === "Y"
+      || String(transaction.transactionNumber || "").startsWith("REV");
+    if (isReversal) return false;
+    if (childParentIds.has(String(transaction.id))) return false;
+    const signature = transactionReversalSignature(transaction);
+    if (orphanedReversalCounts[signature] > 0) {
+      orphanedReversalCounts[signature] -= 1;
+      return false;
+    }
+    return true;
+  });
+  
+  // Debug Ajinkya's effective transactions
+  const ajinkyaEffective = effectiveResult.filter(t => t.memberId === 57);
+  if (ajinkyaEffective.length > 0 && ajinkyaReversals.length > 0) {
+    console.log("✅ AFTER FILTER: Ajinkya effective transactions count:", ajinkyaEffective.length, "Total effective:", effectiveResult.length);
+  }
+  
+  return effectiveResult;
 }
 
 export function loanBelongsToMember(loan, member) {
@@ -143,7 +240,7 @@ export function calculateLegacyGroupOpeningSummary(state, { totalSavings = 0, ac
 }
 
 export function calculateGroupFinanceSummary(state, period = getDashboardPeriod(state)) {
-  const completedTransactions = getCompletedTransactions(state.transactions || []);
+  const completedTransactions = getEffectiveCompletedTransactions(getCompletedTransactions(state.transactions || []));
   const completedExpenses = getCompletedTransactions(state.expenses || []);
   const activeLoans = (state.loans || []).filter(isOutstandingLoan);
   const completedLoans = (state.loans || []).filter((loan) =>
@@ -211,17 +308,17 @@ function isPendingStatus(status) {
   return String(status ?? "").toUpperCase() === "PENDING";
 }
 
-function memberSavingsBeforeWithdrawals(member, transactions = []) {
+function memberSavingsBeforeWithdrawals(member, transactions = [], rawTransactions = []) {
   const memberTransactions = transactions.filter((transaction) => String(transaction.memberId) === String(member?.id));
+  const rawMemberTransactions = rawTransactions.filter((transaction) => String(transaction.memberId) === String(member?.id));
   const ledgerSavings = memberTransactions
     .filter((transaction) => transaction.transactionType !== "Withdrawal")
     .filter((transaction) => transaction.transactionType !== "Group Expense Share")
     .reduce((sum, transaction) =>
       sum + Number(transaction.allocation?.savings ?? 0) + Number(transaction.allocation?.excess ?? 0), 0);
-  const hasSavingsLedger = memberTransactions.some((transaction) =>
+  const hasSavingsLedger = rawMemberTransactions.some((transaction) =>
     transaction.transactionType !== "Withdrawal"
     && transaction.transactionType !== "Group Expense Share"
-    && (Number(transaction.allocation?.savings ?? 0) !== 0 || Number(transaction.allocation?.excess ?? 0) !== 0)
   );
   return hasSavingsLedger ? ledgerSavings : Number(member?.savings || 0);
 }
@@ -262,7 +359,7 @@ export function validateDashboardCards(cards) {
 }
 
 export function calculateDashboardCards(state, period = getDashboardPeriod(state)) {
-  const completedTransactions = getCompletedTransactions(state.transactions || []);
+  const completedTransactions = getEffectiveCompletedTransactions(getCompletedTransactions(state.transactions || []));
   const completedExpenses = getCompletedTransactions(state.expenses || []);
   const activeLoans = (state.loans || []).filter(isOutstandingLoan);
   const completedLoans = (state.loans || []).filter((loan) =>
@@ -272,8 +369,9 @@ export function calculateDashboardCards(state, period = getDashboardPeriod(state
   const periodTransactions = completedTransactions.filter((transaction) => isDateInPeriod(transaction.transactionDate, period));
   const activeMembers = (state.members || []).filter((member) => !isInactiveMember(member));
   const closedMembers = (state.members || []).filter(isInactiveMember);
-  const activeMemberSavings = activeMembers.reduce((sum, member) => sum + memberSavingsBeforeWithdrawals(member, completedTransactions), 0);
-  const closedMemberSavings = closedMembers.reduce((sum, member) => sum + memberSavingsBeforeWithdrawals(member, completedTransactions), 0);
+  const rawCompletedTransactions = getCompletedTransactions(state.transactions || []);
+  const activeMemberSavings = activeMembers.reduce((sum, member) => sum + memberSavingsBeforeWithdrawals(member, completedTransactions, rawCompletedTransactions), 0);
+  const closedMemberSavings = closedMembers.reduce((sum, member) => sum + memberSavingsBeforeWithdrawals(member, completedTransactions, rawCompletedTransactions), 0);
   const withdrawnSavings = withdrawalTotal(completedTransactions);
   const totalSavingsHeader = activeMemberSavings + closedMemberSavings - withdrawnSavings;
 
@@ -468,7 +566,7 @@ export function validateMemberDashboardCards(cards) {
 
 export function calculateMemberDashboardCards(member, state, period = getDashboardPeriod(state), actor = null) {
   const summary = calculateMemberFinanceSummary(member, state, period, actor);
-  const completedTransactions = getCompletedTransactions(state.transactions || []);
+  const completedTransactions = getEffectiveCompletedTransactions(getCompletedTransactions(state.transactions || []));
   const memberTransactions = completedTransactions.filter((transaction) => String(transaction.memberId) === String(member?.id));
   const grossSavings = memberTransactions
     .filter((transaction) => transaction.transactionType !== "Withdrawal")
@@ -597,7 +695,7 @@ export function calculateOpeningShareRows(state, amount) {
 
 export function calculateLegacyGroupOpeningMemberImpact(member, state) {
   const openingSummary = calculateLegacyGroupOpeningSummary(state, {
-    totalSavings: calculateTotalSavings(getCompletedTransactions(state.transactions || []), state.members || []),
+    totalSavings: calculateTotalSavings(getEffectiveCompletedTransactions(getCompletedTransactions(state.transactions || [])), state.members || []),
     activeLoanOutstanding: calculateDerivedLoanOutstanding(state.loans || [], state)
   });
   const gainRows = calculateOpeningShareRows(state, openingSummary.groupGain);
@@ -608,15 +706,40 @@ export function calculateLegacyGroupOpeningMemberImpact(member, state) {
 }
 
 export function calculateMemberLedgerSummary(member, state) {
-  const completedTransactions = getCompletedTransactions(state.transactions || []);
+  const rawTransactions = getCompletedTransactions(state.transactions || []);
+  const completedTransactions = getEffectiveCompletedTransactions(rawTransactions);
   const memberTransactions = completedTransactions.filter((transaction) => String(transaction.memberId) === String(member?.id));
+  const rawMemberTransactions = rawTransactions.filter((transaction) => String(transaction.memberId) === String(member?.id));
+  
+  // Debug Ajinkya's ledger
+  if (member?.id === 57) {
+    console.log("📊 AJINKYA LEDGER DEBUG:");
+    console.log(`   Raw transactions count: ${rawMemberTransactions.length}`);
+    console.log(`   Effective transactions count: ${memberTransactions.length}`);
+    memberTransactions.forEach((trx, idx) => {
+      console.log(`   Effective Trx ${idx + 1}: ID=${trx.id}, Type=${trx.transactionType}, Amount=${trx.amount}, Allocation.savings=${trx.allocation?.savings}, Allocation.excess=${trx.allocation?.excess}`);
+    });
+    rawMemberTransactions.forEach((trx, idx) => {
+      console.log(`   Raw Trx ${idx + 1}: ID=${trx.id}, Type=${trx.transactionType}, Amount=${trx.amount}, Allocation.savings=${trx.allocation?.savings}, Allocation.excess=${trx.allocation?.excess}, IsReversal=${String(trx.reversedFlag) === 'Y' || String(trx.transactionNumber).startsWith('REV')}`);
+    });
+  }
+  
   let savings = memberTransactions
     .filter((transaction) => transaction.transactionType !== "Group Expense Share")
     .reduce((sum, transaction) =>
       sum + Number(transaction.allocation?.savings ?? 0) + Number(transaction.allocation?.excess ?? 0), 0);
-  if (savings === 0 && Number(member?.savings || 0) > 0) {
+  const hasSavingsLedger = rawMemberTransactions.some((transaction) =>
+    transaction.transactionType !== "Withdrawal"
+    && transaction.transactionType !== "Group Expense Share"
+  );
+  if (!hasSavingsLedger && Number(member?.savings || 0) > 0) {
     savings = Number(member.savings || 0);
   }
+  
+  if (member?.id === 57) {
+    console.log(`   Calculated savings: ${savings}, hasSavingsLedger: ${hasSavingsLedger}, member.savings: ${member.savings}`);
+  }
+  
   const expense = Math.abs(memberTransactions
     .filter((transaction) => transaction.transactionType === "Group Expense Share")
     .reduce((sum, transaction) => sum + Number(transaction.allocation?.savings ?? transaction.amount ?? 0), 0));
@@ -646,7 +769,7 @@ export function calculateMemberLedgerSummary(member, state) {
 
 export function calculateDerivedLoanPrincipalOutstanding(loan, state) {
   if (!isOutstandingLoan(loan)) return 0;
-  const completedTransactions = getCompletedTransactions(state.transactions || []);
+  const completedTransactions = getEffectiveCompletedTransactions(getCompletedTransactions(state.transactions || []));
   const loanStartDate = loan.startDate || loan.distributionDate || "";
   const principalPaid = completedTransactions
     .filter((transaction) => loanBelongsToMember(loan, { id: transaction.memberId, fullName: transaction.memberName }))
@@ -690,7 +813,7 @@ export function buildOpeningShareRatioRows({ members = [], state, currentMemberI
 }
 
 export function calculateDerivedOpeningSurplus({ state, currentSaving = 0, currentLoan = 0, groupBankBalance = 0, groupExpense = 0 }) {
-  const completedTransactions = getCompletedTransactions(state.transactions || []);
+  const completedTransactions = getEffectiveCompletedTransactions(getCompletedTransactions(state.transactions || []));
   const existingSavings = calculateTotalSavings(completedTransactions, state.members);
   const existingLoanOutstanding = calculateDerivedLoanOutstanding(state.loans || [], state);
   return Number(groupBankBalance || 0)
@@ -724,15 +847,8 @@ export function getEffectiveMemberSetup(member, group = {}) {
 }
 
 export function completedTransactionsForMember(state, memberId, untilDate = null) {
-  const transactions = getCompletedTransactions(state.transactions || [])
-    .filter((transaction) => String(transaction.memberId) === String(memberId))
-    .filter((transaction) => !untilDate || String(transaction.transactionDate || "") <= String(untilDate));
-  const parentIds = new Set(transactions.filter((trx) => String(trx.parentTransactionId || "").trim()).map((trx) => String(trx.parentTransactionId)));
-  return transactions.filter((transaction) => {
-    if (String(transaction.reversedFlag || "").toUpperCase() === "Y") return false;
-    if (parentIds.has(String(transaction.id))) return false;
-    return true;
-  });
+  return getEffectiveCompletedTransactions(getCompletedTransactions(state.transactions || []), untilDate)
+    .filter((transaction) => String(transaction.memberId) === String(memberId));
 }
 
 export function allocationPaidForMember(state, memberId, bucket, { fromDate = null, untilDate = null } = {}) {
@@ -935,7 +1051,7 @@ export function getDuePeriods(state) {
 
 export function calculatePendingDues(state, actor = null, memberOnly = false) {
   const group = state.groups?.[0] ?? {};
-  const completedTransactions = getCompletedTransactions(state.transactions || []);
+  const allCompletedTransactions = getCompletedTransactions(state.transactions || []);
   const dismissedDueIds = new Set((state.dismissedPendingDues || []).map(String));
   const groupStartDate = new Date(group.createdDate || group.startDate || group.creationDate || "1900-01-01");
   groupStartDate.setHours(0, 0, 0, 0);
@@ -971,11 +1087,15 @@ export function calculatePendingDues(state, actor = null, memberOnly = false) {
     const cycleStart = getPreviousDueDate(group, dueDate);
     cycleStart.setDate(cycleStart.getDate() + 1);
     const cycleStartIso = toIsoDateValue(cycleStart);
-    const paymentCutoff = dueDate < today ? dueDate : today;
+    // Use the period due date as the cutoff so that future remaining days
+    // within the current financial period are considered (including future-dated
+    // completed transactions) when checking if dues are paid.
+    const paymentCutoff = dueDate;
     const paymentCutoffIso = toIsoDateValue(paymentCutoff);
     return members.map((member) => {
       const setup = getEffectiveMemberSetup(member, group);
-      const transactions = completedTransactions.filter((transaction) =>
+      const effectiveTransactionsTillCutoff = getEffectiveCompletedTransactions(allCompletedTransactions, paymentCutoffIso);
+      const transactions = effectiveTransactionsTillCutoff.filter((transaction) =>
         String(transaction.memberId) === String(member.id)
         && String(transaction.transactionDate || "") >= cycleStartIso
         && String(transaction.transactionDate || "") <= paymentCutoffIso

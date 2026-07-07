@@ -2,6 +2,14 @@ const SAVINGS_TYPES = ["Savings Collection", "Extra Deposit", "Migrated"];
 const COLLECTION_TYPES = ["Savings Collection", "Extra Deposit", "Migrated", "Loan Repayment", "Interest Collection", "Penalty Collection", "Other Charge", "Waiver"];
 const EXPENSE_TYPES = ["Expense", "Withdrawal"];
 
+function isCorrectionTransaction(transaction) {
+  const isReversal = String(transaction?.reversedFlag || "").toUpperCase() === "Y"
+    || String(transaction?.transactionNumber || "").startsWith("REV");
+  const isAdjustment = String(transaction?.adjustmentFlag || "").toUpperCase() === "Y"
+    || String(transaction?.transactionNumber || "").startsWith("ADJ");
+  return isReversal || isAdjustment;
+}
+
 export function calculateLoanInterest({ principalOutstanding, originalPrincipal, annualRate, monthlyRate, days, interestType = 'Reducing' }) {
   if (!principalOutstanding || principalOutstanding <= 0) {
     return 0;
@@ -306,18 +314,43 @@ function activeMembersOn(members, date) {
   return members.filter((member) => isEligibleForShareOnDate(member, date));
 }
 
+function transactionReversalSignature(transaction) {
+  return [
+    String(transaction.memberId ?? ""),
+    String(transaction.transactionType ?? ""),
+    String(transaction.transactionDate ?? ""),
+    Math.abs(Number(transaction.amount || 0)),
+    Math.abs(Number(transaction.allocation?.savings || 0)),
+    Math.abs(Number(transaction.allocation?.excess || 0)),
+    Math.abs(Number(transaction.allocation?.principal || 0)),
+    Math.abs(Number(transaction.allocation?.interest || 0)),
+    Math.abs(Number(transaction.allocation?.penalty || 0))
+  ].join("|");
+}
+
 function transactionsForShareDistribution(transactions = []) {
   const allTransactions = Array.isArray(transactions) ? transactions : [];
-  const reversedParentIds = new Set(
-    allTransactions
-      .filter((transaction) => String(transaction.parentTransactionId || "").trim())
-      .filter((transaction) => String(transaction.reversedFlag || "").toUpperCase() === "Y" || String(transaction.transactionNumber || "").startsWith("REV"))
-      .map((transaction) => String(transaction.parentTransactionId))
-  );
+  const reversalCandidates = allTransactions
+    .filter((transaction) => String(transaction.reversedFlag || "").toUpperCase() === "Y" || String(transaction.transactionNumber || "").startsWith("REV"));
+  const reversedParentIds = new Set(reversalCandidates
+    .filter((transaction) => String(transaction.parentTransactionId || "").trim())
+    .map((transaction) => String(transaction.parentTransactionId)));
+  const orphanedReversalCounts = reversalCandidates
+    .filter((transaction) => !String(transaction.parentTransactionId || "").trim())
+    .reduce((counts, transaction) => {
+      const signature = transactionReversalSignature(transaction);
+      counts[signature] = (counts[signature] || 0) + 1;
+      return counts;
+    }, {});
 
   return allTransactions.filter((transaction) => {
     if (String(transaction.reversedFlag || "").toUpperCase() === "Y") return false;
     if (reversedParentIds.has(String(transaction.id))) return false;
+    const signature = transactionReversalSignature(transaction);
+    if (orphanedReversalCounts[signature] > 0) {
+      orphanedReversalCounts[signature] -= 1;
+      return false;
+    }
     return true;
   });
 }

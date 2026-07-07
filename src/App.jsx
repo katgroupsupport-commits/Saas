@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import {
+  ArrowRightLeft,
   Bell,
   BookOpen,
   CalendarCheck,
@@ -10,20 +11,23 @@ import {
   CreditCard,
   FileClock,
   FileBarChart,
+  Home,
   IndianRupee,
   Landmark,
   ListChecks,
   LockKeyhole,
   LogOut,
-  Menu,
   MessageCircle,
+  MoreHorizontal,
   BotMessageSquare,
+  PieChart,
   Search,
   Settings,
   ShieldCheck,
   Shuffle,
   SlidersHorizontal,
   Undo2,
+  User,
   Users,
   WalletCards,
   X
@@ -60,6 +64,7 @@ import {
   configuredNumber,
   financeFieldDictionary,
   getCompletedTransactions,
+  getEffectiveCompletedTransactions,
   getCurrentMember,
   getDashboardPeriod,
   getEffectiveMemberSetup,
@@ -196,6 +201,64 @@ navIcons.Operations = WalletCards;
 navIcons.Waivers = ShieldCheck;
 navIcons["AI Agent"] = BotMessageSquare;
 
+const homeHubButtons = [
+  { to: "/dashboard/group", label: "Group Dashboard", Icon: PieChart },
+  { to: "/dashboard/member", label: "Member Dashboard", Icon: User },
+  { to: "/pending-dues", label: "Pending Dues", Icon: CalendarCheck },
+  { to: "/approvals", label: "Approvals", Icon: ShieldCheck },
+  { to: "/reports", label: "Reports", Icon: FileBarChart }
+];
+
+const setupHubButtons = [
+  { to: "/members", label: "Add Members", Icon: Users },
+  { to: "/setup/group", label: "Group Details", Icon: Landmark },
+  { to: "/setup/member", label: "Member Details", Icon: User },
+  { to: "/setup/approval", label: "Approval Setup", Icon: ShieldCheck },
+  { to: "/setup/roles", label: "Role Setup", Icon: Settings },
+  { to: "/setup/loan", label: "Loan Setup", Icon: IndianRupee },
+  { to: "/setup/periods", label: "Period Setup", Icon: CalendarCheck }
+];
+
+const transactionsHubButtons = [
+  { to: "/operations/transactions", label: "Transactions", Icon: WalletCards },
+  { to: "/operations/loans", label: "Loans", Icon: IndianRupee },
+  { to: "/operations/withdrawals", label: "Withdrawals", Icon: WalletCards },
+  { to: "/corrections/reversals", label: "Reversals", Icon: Undo2 },
+  { to: "/corrections/waivers", label: "Waivers", Icon: ShieldCheck }
+];
+
+const moreHubButtons = [
+  { to: "/setup/calculator", label: "Share Calculator", Icon: Calculator },
+  { to: "/contact-support", label: "Contact", Icon: MessageCircle },
+  { to: "/subscriptions", label: "Subscriptions", Icon: CreditCard },
+  { to: "/guide", label: "User Guide", Icon: BookOpen },
+  { to: "/product-owner", label: "Product Owner", Icon: Users }
+];
+
+function HubGridPage({ title, items }) {
+  const navigate = useNavigate();
+  return (
+    <section className="hub-grid-page">
+      <div className="page-heading">
+        <h2>{title}</h2>
+      </div>
+      <div className="hub-grid">
+        {items.map((item) => {
+          const Icon = item.Icon;
+          return (
+            <button key={item.to} type="button" className="hub-tile" onClick={() => navigate(item.to)}>
+              <div className="hub-tile-icon">
+                <Icon size={28} />
+              </div>
+              <span>{item.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function buildSidebarSections(menu, role) {
   const byLabel = Object.fromEntries((menu || []).map((item) => [item.label, item]));
   const has = (label) => Boolean(byLabel[label]);
@@ -247,6 +310,134 @@ function buildSidebarSections(menu, role) {
   return sections.filter((section) => !section.children || section.children.length > 0);
 }
 
+function recalculateMemberSavingsFromEffectiveLedger(tenantData) {
+  if (!tenantData || !tenantData.members || !tenantData.transactions) {
+    return tenantData;
+  }
+
+  const correctedMembers = tenantData.members.map((member) => {
+    const ledgerSummary = calculateMemberLedgerSummary(member, tenantData);
+    return {
+      ...member,
+      savings: ledgerSummary.savings
+    };
+  });
+
+  return {
+    ...tenantData,
+    members: correctedMembers
+  };
+}
+
+async function syncMemberSavingsCorrectionsToSupabase(tenantData) {
+  if (!tenantData || !tenantData.members || !tenantData.transactions || !repository.isConfigured()) {
+    return;
+  }
+
+  try {
+    const membersToUpdate = [];
+    
+    // Log all transactions to see what we have
+    const reversals = tenantData.transactions.filter((t) => t.reversedFlag === "Y" || String(t.transactionNumber || "").startsWith("REV"));
+    console.log(`🔍 Total transactions loaded: ${tenantData.transactions.length}, Reversals: ${reversals.length}`, reversals);
+    
+    // Find Ajinkya specifically
+    const ajinkya = tenantData.members.find(m => m.fullName === "Ajinkya More");
+    if (ajinkya) {
+      const ajinkyaTransactions = tenantData.transactions.filter(t => String(t.memberId) === String(ajinkya.id));
+      const ajinkyaReversals = ajinkyaTransactions.filter(t => t.reversedFlag === "Y" || String(t.transactionNumber || "").startsWith("REV"));
+      const ajinkyaParentIds = new Set(ajinkyaReversals.map(r => r.parentTransactionId).filter(id => id));
+      const ajinkyaParents = ajinkyaTransactions.filter(t => ajinkyaParentIds.has(t.id));
+      
+      console.log(`🎯 AJINKYA MORE DETAILED ANALYSIS:`, {
+        id: ajinkya.id,
+        storedSavings: Number(ajinkya.savings || 0),
+        totalTransactions: ajinkyaTransactions.length,
+        reversals: ajinkyaReversals.length,
+        parentTransactions: ajinkyaParents.length
+      });
+      
+      if (ajinkyaReversals.length > 0) {
+        console.log(`  └─ Reversals:`, ajinkyaReversals.map(r => ({
+          id: r.id,
+          amount: r.amount,
+          allocationSavings: r.allocation?.savings,
+          trxNumber: r.transactionNumber,
+          status: r.approvalStatus,
+          parentId: r.parentTransactionId,
+          reversedFlag: r.reversedFlag
+        })));
+      }
+      
+      if (ajinkyaParents.length > 0) {
+        console.log(`  └─ Parent Transactions (to be reversed):`, ajinkyaParents.map(p => ({
+          id: p.id,
+          amount: p.amount,
+          allocationSavings: p.allocation?.savings,
+          trxNumber: p.transactionNumber,
+          status: p.approvalStatus
+        })));
+      }
+      
+      const ledgerSummary = calculateMemberLedgerSummary(ajinkya, tenantData);
+      console.log(`  └─ Calculated Summary:`, {
+        calculatedSavings: ledgerSummary.savings,
+        difference: ledgerSummary.savings - Number(ajinkya.savings || 0)
+      });
+    }
+    
+    for (const member of tenantData.members) {
+      const memberTransactions = tenantData.transactions.filter((t) => String(t.memberId) === String(member.id));
+      const memberReversals = memberTransactions.filter((t) => t.reversedFlag === "Y" || String(t.transactionNumber || "").startsWith("REV"));
+      
+      const ledgerSummary = calculateMemberLedgerSummary(member, tenantData);
+      const calculatedSavings = ledgerSummary.savings;
+      const storedSavings = Number(member.savings || 0);
+      
+      const diff = calculatedSavings - storedSavings;
+      if (memberReversals.length > 0 || Math.abs(diff) > 0.01) {
+        console.log(`📊 ${member.fullName} (${member.id}):`, {
+          transactions: memberTransactions.length,
+          reversals: memberReversals.length,
+          stored: storedSavings,
+          calculated: calculatedSavings,
+          diff: diff
+        });
+      }
+      
+      if (Math.abs(diff) > 0.01) {
+        console.log(`✅ Needs correction: ${member.fullName}`, {
+          stored: storedSavings,
+          calculated: calculatedSavings,
+          diff: diff
+        });
+        membersToUpdate.push({
+          memberId: member.id,
+          correctedSavings: calculatedSavings,
+          memberName: member.fullName
+        });
+      }
+    }
+    
+    if (membersToUpdate.length > 0) {
+      console.log(`💾 Updating ${membersToUpdate.length} members`, membersToUpdate);
+      
+      for (const update of membersToUpdate) {
+        try {
+          console.log(`  ↳ Updating ${update.memberName} savings to ₹${update.correctedSavings.toFixed(2)}`);
+          await repository.updateMember(update.memberId, {
+            savings: update.correctedSavings
+          });
+        } catch (err) {
+          console.error(`Failed to sync savings for member ${update.memberId}:`, err);
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Failed to sync member savings corrections:", err);
+  }
+}
+
 function App() {
   const initialState = loadState();
   const [state, setState] = useState(initialState);
@@ -274,6 +465,7 @@ function App() {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   // group switcher popover removed for product owner; navigate to full page instead
   const [expandedMenu, setExpandedMenu] = useState("Dashboard");
+  const [isRefreshingTenant, setIsRefreshingTenant] = useState(false);
 
   useEffect(() => {
     setShowNotificationDetails(false);
@@ -386,20 +578,23 @@ function App() {
 
         const tenantData = await withTimeout(repository.listTenantData(), SUPABASE_BOOT_TIMEOUT_MS, "Tenant data loading");
         if (!active) return;
-        if (tenantData.groups?.length > 0) {
-          const selectedStillExists = tenantData.groups.some((group) => String(group.id) === String(selectedGroupId));
+        const correctedTenantData = recalculateMemberSavingsFromEffectiveLedger(tenantData);
+        if (correctedTenantData.groups?.length > 0) {
+          const selectedStillExists = correctedTenantData.groups.some((group) => String(group.id) === String(selectedGroupId));
           if (!selectedStillExists) {
-            setSelectedGroupId(tenantData.groups[0].id);
+            setSelectedGroupId(correctedTenantData.groups[0].id);
           }
         }
         
         setState(() => ({
-          ...tenantData,
+          ...correctedTenantData,
           session: { signedIn: true, user }
         }));
         if (tenantData.groups.length === 0 && location.pathname === "/") {
           navigate("/select-group", { replace: true });
         }
+        
+        syncMemberSavingsCorrectionsToSupabase(correctedTenantData).catch(err => console.error("Sync failed:", err));
       } catch (error) {
         if (active) {
           setNotification({
@@ -484,7 +679,9 @@ function App() {
         ? await withTimeout(repository.signIn(credentials.values.identifier, credentials.values.password), SUPABASE_BOOT_TIMEOUT_MS, "Login")
         : await withTimeout(repository.getSessionUser(), SUPABASE_BOOT_TIMEOUT_MS, "Session check");
       const tenantData = await withTimeout(repository.listTenantData(), SUPABASE_BOOT_TIMEOUT_MS, "Tenant data loading");
-      setState({ ...tenantData, session: { signedIn: true, user: signedInUser } });
+      const correctedTenantData = recalculateMemberSavingsFromEffectiveLedger(tenantData);
+      setState({ ...correctedTenantData, session: { signedIn: true, user: signedInUser } });
+      syncMemberSavingsCorrectionsToSupabase(correctedTenantData).catch(err => console.error("Sync failed:", err));
       navigate("/select-group", { replace: true });
       return;
     }
@@ -582,6 +779,7 @@ function App() {
               >
                 Switch
               </button>
+              {/* Refresh button removed — refresh flow handled elsewhere */}
             </span>
             {selectedGroup?.code && <small>{selectedGroup.code}</small>}
             
@@ -654,15 +852,28 @@ function App() {
 
       <main className="main">
         <header className="topbar">
-          <button className="icon-button mobile-only" type="button" onClick={() => setMobileNavOpen(true)} aria-label="Open menu">
-            <Menu size={20} />
-          </button>
           <div className="topbar-title">
             <div>
-              <p className="eyebrow">Bachat Gat finance platform</p>
               <h1>प्रगती (Finance Console)</h1>
+              <div className="group-header">
+                <span>{selectedGroup?.name ?? "No group selected"}</span>
+                <button type="button" className="switch-button" onClick={() => {
+                  if (isProductOwner) {
+                    setMobileNavOpen(false);
+                    navigate("/select-group");
+                    return;
+                  }
+                  setSelectedGroupId(null);
+                  setMobileNavOpen(false);
+                  navigate("/select-group");
+                }}>
+                  Switch
+                </button>
+              </div>
             </div>
-            <button className="icon-button notification-top-right" type="button" aria-label="Notifications" onClick={() => navigate("/notifications")}>
+          </div>
+          <div className="topbar-right">
+            <button className="icon-button notification-top-right" type="button" aria-label="Notifications" onClick={() => navigate("/notifications") }>
               <Bell size={16} />
               {(visibleViewState.notifications || []).filter((item) => !item.read).length > 0 && (
                 <span className="notification-badge">{Math.min(99, (visibleViewState.notifications || []).filter((item) => !item.read).length)}</span>
@@ -743,7 +954,11 @@ function App() {
         )}
         <Routes>
           <Route path="/select-group" element={<GroupSelectionPage state={state} setState={patchState} selectedGroupId={selectedGroupId} setSelectedGroupId={setSelectedGroupId} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
-          <Route path="/" element={<Dashboard role={role} state={visibleViewState} actor={{ ...state.session.user, role }} memberPortal={memberPortalActive} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
+          <Route path="/" element={<Navigate replace to="/home" />} />
+          <Route path="/home" element={<HubGridPage title="Home" items={homeHubButtons} />} />
+          <Route path="/transactions-hub" element={<HubGridPage title="Transactions" items={transactionsHubButtons} />} />
+          <Route path="/setup-hub" element={<HubGridPage title="Setup" items={setupHubButtons} />} />
+          <Route path="/more" element={<HubGridPage title="More" items={moreHubButtons} />} />
           <Route path="/dashboard/group" element={<Dashboard role={role} state={visibleViewState} actor={{ ...state.session.user, role }} forceGroupView setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
           <Route path="/dashboard/member" element={<Dashboard role={role} state={visibleViewState} actor={{ ...state.session.user, role }} memberPortal setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
           <Route path="/group-dashboard" element={<Dashboard role={role} state={visibleViewState} actor={{ ...state.session.user, role }} forceGroupView setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
@@ -788,6 +1003,28 @@ function App() {
           <Route path="*" element={<Dashboard role={role} state={viewState} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
         </Routes>
       </main>
+      <nav className="bottom-nav" aria-label="Primary navigation">
+        <NavLink className="bottom-nav-item" to="/home">
+          <Home size={20} />
+          <span>Home</span>
+        </NavLink>
+        <NavLink className="bottom-nav-item" to="/transactions-hub">
+          <ArrowRightLeft size={20} />
+          <span>Transactions</span>
+        </NavLink>
+        <NavLink className="bottom-nav-item" to="/setup-hub">
+          <Settings size={20} />
+          <span>Setup</span>
+        </NavLink>
+        <NavLink className="bottom-nav-item" to="/profile">
+          <User size={20} />
+          <span>Profile</span>
+        </NavLink>
+        <NavLink className="bottom-nav-item" to="/more">
+          <MoreHorizontal size={20} />
+          <span>More</span>
+        </NavLink>
+      </nav>
       {previewMember && (
         <div className="modal-overlay" onClick={() => setPreviewMember(null)}>
           <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
@@ -1817,7 +2054,7 @@ function Dashboard({ role, state, actor, forceGroupView = false, memberPortal = 
     const loanDate = (loan) => loan.startDate || loan.distributionDate || loan.requestDate || loan.createdAt || "";
     const loanActivityDate = (loan) => {
       const loanStartDate = loanDate(loan);
-      const memberLoanTransactions = getCompletedTransactions(state.transactions || [])
+      const memberLoanTransactions = getEffectiveCompletedTransactions(getCompletedTransactions(state.transactions || []))
         .filter((transaction) => loanBelongsToMember(loan, { id: transaction.memberId, fullName: transaction.memberName }))
         .filter((transaction) => !loanStartDate || String(transaction.transactionDate || "") >= String(loanStartDate))
         .map((transaction) => transaction.transactionDate)
@@ -2032,7 +2269,7 @@ function applyShareDistributionToMembers(members, shareRows) {
 
 function getSharePeriodsForState(state, { startDate = null, endDate = null } = {}) {
   const periods = (state.periods || []).filter((period) => period?.startDate && period?.endDate);
-  const transactionPeriods = getCompletedTransactions(state.transactions || [])
+  const transactionPeriods = getEffectiveCompletedTransactions(getCompletedTransactions(state.transactions || []))
     .map((transaction) => transaction.transactionDate)
     .filter(Boolean)
     .map((transactionDate) => ({
@@ -2071,7 +2308,7 @@ function getSharePeriodsForState(state, { startDate = null, endDate = null } = {
 
 function getAccumulatedShareByMember(state, { startDate = null, endDate = null } = {}) {
   const accumulatedShareByMember = Object.fromEntries((state.members || []).map((member) => [String(member.id), 0]));
-  const completedTrx = getCompletedTransactions(state.transactions || []);
+  const completedTrx = getEffectiveCompletedTransactions(getCompletedTransactions(state.transactions || []));
   const rangeStart = startDate || getDashboardPeriod(state)?.startDate || toIsoDateValue();
   const rangeEnd = endDate || getDashboardPeriod(state)?.endDate || toIsoDateValue();
   const rangeTransactions = completedTrx.filter((transaction) => {
@@ -2519,16 +2756,18 @@ function GroupSelectionPage({ state, setState, selectedGroupId, setSelectedGroup
           });
 
           const tenantData = await repository.listTenantData();
-          const tenantMembers = tenantData.members?.some((member) => String(member.groupId) === String(createdGroup.id))
-            ? tenantData.members
+          const correctedTenantData = recalculateMemberSavingsFromEffectiveLedger(tenantData);
+          const tenantMembers = correctedTenantData.members?.some((member) => String(member.groupId) === String(createdGroup.id))
+            ? correctedTenantData.members
             : createdGroup.creatorMember
-              ? [createdGroup.creatorMember, ...(tenantData.members || [])]
-              : tenantData.members;
+              ? [createdGroup.creatorMember, ...(correctedTenantData.members || [])]
+              : correctedTenantData.members;
           setState(() => ({
-            ...tenantData,
+            ...correctedTenantData,
             members: tenantMembers,
-            session: { signedIn: true, user: tenantData.session?.user ?? actor }
+            session: { signedIn: true, user: correctedTenantData.session?.user ?? actor }
           }));
+          syncMemberSavingsCorrectionsToSupabase(correctedTenantData).catch(err => console.error("Sync failed:", err));
 
           setSelectedGroupId(createdGroup.id);
           setValues({ name: '', primaryContact: '' });
@@ -5301,12 +5540,41 @@ function Transactions({ state, setState, actor, setSelectedGroupId, setConfirmDi
     .filter((item) => isPendingOrRecentCompleted(item, "transactionDate", 60))
     .sort((a, b) => String(b.transactionDate).localeCompare(String(a.transactionDate)));
   
+  // Debug: Check what transactions are visible for Ajinkya
+  const ajinkyaAllTrx = state.transactions?.filter(t => t.memberId === 57) || [];
+  const ajinkyaVisibleTrx = visibleTransactionRows.filter(t => t.memberId === 57) || [];
+  if (ajinkyaAllTrx.length > 0) {
+    console.log("📋 AJINKYA TRANSACTION VISIBILITY:");
+    console.log(`   All transactions for Ajinkya: ${ajinkyaAllTrx.length}`);
+    ajinkyaAllTrx.forEach(t => {
+      const isVisible = ajinkyaVisibleTrx.some(v => v.id === t.id);
+      const isPending = isPendingOrRecentCompleted(t, "transactionDate", 60);
+      console.log(`   ID=${t.id}, Date=${t.transactionDate}, Type=${t.transactionType}, Status=${t.approvalStatus}, Visible=${isVisible}, PassesFilter=${isPending}`);
+    });
+  }
+  
   // Add fallback for periods
   const periodsData = Array.isArray(state.periods) ? state.periods : [];
   
   const openPeriod = getOpenPeriod(periodsData) || getCurrentMonthPeriod(periodsData);
   const isGroupExpense = values.memberId === GROUP_EXPENSE_MEMBER_ID;
   let member = isGroupExpense ? null : state.members.find((item) => String(item.id) === String(values.memberId));
+  
+  // Debug: Check transaction ID=86 date
+  const trx86 = state.transactions?.find(t => t.id === 86);
+  if (trx86) {
+    const sixtyDaysAgo = new Date();
+    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+    const trx86Date = new Date(trx86.transactionDate);
+    const isPast60 = trx86Date < sixtyDaysAgo;
+    console.log("🔍 Transaction ID=86 date verification:");
+    console.log(`   Date: ${trx86.transactionDate}, Parsed: ${trx86Date.toISOString()}`);
+    console.log(`   Today: ${new Date().toISOString()}`);
+    console.log(`   60 days ago: ${sixtyDaysAgo.toISOString()}`);
+    console.log(`   Is older than 60 days? ${isPast60}`);
+    console.log(`   isPendingOrRecentCompleted? ${isPendingOrRecentCompleted(trx86, "transactionDate", 60)}`);
+  }
+  
   const memberActiveLoans = state.loans
     .filter((item) => loanBelongsToMember(item, member) && (item.principalOutstanding || 0) > 0)
     .sort((a, b) => String(a.startDate || "").localeCompare(String(b.startDate || "")));
@@ -5511,7 +5779,9 @@ function Transactions({ state, setState, actor, setSelectedGroupId, setConfirmDi
 
         // Refresh tenant data to get canonical members/periods.
         const tenantData = await repository.listTenantData();
-        setState((current) => ({ ...tenantData }));
+        const correctedTenantData = recalculateMemberSavingsFromEffectiveLedger(tenantData);
+        setState((current) => ({ ...correctedTenantData }));
+        syncMemberSavingsCorrectionsToSupabase(correctedTenantData).catch(err => console.error("Sync failed:", err));
         setSelectedGroupId(createdGroup.id);
         effectiveGroupId = createdGroup.id;
         // re-resolve member from refreshed tenant data if possible
@@ -5582,7 +5852,9 @@ function Transactions({ state, setState, actor, setSelectedGroupId, setConfirmDi
     if (isUuid(effectiveGroupId) && effectivePeriod && !isUuid(effectivePeriod?.id)) {
       try {
         const tenantData = await repository.listTenantData();
-        setState((current) => ({ ...tenantData }));
+        const correctedTenantData = recalculateMemberSavingsFromEffectiveLedger(tenantData);
+        setState((current) => ({ ...correctedTenantData }));
+        syncMemberSavingsCorrectionsToSupabase(correctedTenantData).catch(err => console.error("Sync failed:", err));
 
         const refreshedPeriods = Array.isArray(tenantData.periods) ? tenantData.periods : periodsData;
         const refreshedOpenPeriod = getOpenPeriod(refreshedPeriods);
@@ -6037,7 +6309,9 @@ function isWithinPastDays(dateValue, days = 60) {
   const cutoff = new Date(today);
   cutoff.setDate(cutoff.getDate() - days);
   cutoff.setHours(0, 0, 0, 0);
-  return date >= cutoff && date <= today;
+  // Include future-dated transactions as well when deciding the "past X days" window.
+  // This treats any date after the cutoff as in-range, even if it's in the future.
+  return date >= cutoff;
 }
 
 function isPendingOrRecentCompleted(item, dateField = "transactionDate", days = 60) {
@@ -6089,7 +6363,7 @@ function correctionBlockReason(transactions = [], parentTransaction, correctionT
 
 function monthlySavingPaidForMember(transactions = [], memberId, period) {
   if (!memberId || !period) return 0;
-  return getCompletedTransactions(transactions)
+  return getEffectiveCompletedTransactions(getCompletedTransactions(transactions))
     .filter((transaction) =>
       String(transaction.memberId) === String(memberId)
       && transaction.transactionType !== "Group Expense Share"
@@ -6199,10 +6473,12 @@ function Adjustments({ state, setState, actor, setConfirmDialog, setNotification
           const persistedApprovals = approvalRecord.length && repository.isConfigured()
             ? await repository.createApprovalRequests({ groupId: state.groups[0]?.id, approvals: approvalRecord })
             : approvalRecord;
-          setState((current) => audit({
-            state: {
+          setState((current) => {
+            const nextTransactions = [created, ...current.transactions];
+            const affectedMember = current.members.find((m) => String(m.id) === String(selectedTransaction?.memberId));
+            const nextState = {
               ...current,
-              transactions: [created, ...current.transactions],
+              transactions: nextTransactions,
               approvals: [...persistedApprovals, ...current.approvals],
               notifications: hasGroupApprovers
                 ? [
@@ -6210,13 +6486,22 @@ function Adjustments({ state, setState, actor, setConfirmDialog, setNotification
                     ...current.notifications
                   ]
                 : current.notifications
-            },
-            actor,
-            action: "adjust",
-            tableName: "member_transaction_header",
-            recordId: created.id,
-            newValue: created
-          }));
+            };
+            if (affectedMember) {
+              nextState.members = current.members.map((m) => String(m.id) === String(affectedMember.id)
+                ? { ...m, savings: calculateMemberLedgerSummary(m, { ...nextState, transactions: nextTransactions }).savings }
+                : m
+              );
+            }
+            return audit({
+              state: nextState,
+              actor,
+              action: "adjust",
+              tableName: "member_transaction_header",
+              recordId: created.id,
+              newValue: created
+            });
+          });
           setNotification({ type: "success", message: hasGroupApprovers ? "Adjustment submitted for approval." : "Adjustment posted as a separate child entry." });
           setValues((current) => ({ ...current, correctAmount: selectedTransaction.amount, reason: "" }));
           setTimeout(() => setNotification(null), 3000);
@@ -6347,15 +6632,24 @@ function Reversals({ state, setState, actor, setConfirmDialog, setNotification }
     ...reversibleTransactions.map((item) => ({ ...item, itemType: "transaction", key: `transaction:${item.id}` })),
     ...reversibleLoans.map((loan) => ({ ...loan, itemType: "loan", key: `loan:${loan.id}` }))
   ];
+  // Sort reversible items by their date (transactionDate or startDate) descending
+  const sortedReversibleItems = reversibleItems.slice().sort((a, b) => {
+    const aDate = new Date(a.transactionDate || a.startDate || 0).getTime();
+    const bDate = new Date(b.transactionDate || b.startDate || 0).getTime();
+    return bDate - aDate;
+  });
+
   const [values, setValues] = useState({
-    itemKey: reversibleItems[0]?.key ?? "",
+    itemKey: sortedReversibleItems[0]?.key ?? "",
     reversalDate: toIsoDateValue(),
     reason: ""
   });
   const [errors, setErrors] = useState({});
-  const reversalRows = state.transactions
+  const reversalRows = (state.transactions || [])
     .filter((item) => item.reversedFlag === "Y" || item.transactionNumber?.startsWith("REV"))
-    .filter((item) => isPendingOrRecentCompleted(item, "transactionDate", 60));
+    .filter((item) => isPendingOrRecentCompleted(item, "transactionDate", 60))
+    .slice()
+    .sort((a, b) => String(b.transactionDate || "").localeCompare(String(a.transactionDate || "")));
   const selectedItem = reversibleItems.find((item) => item.key === values.itemKey);
   const selectedMember = state.members.find((item) => String(item.id) === String(selectedItem?.memberId));
   const blockedOriginal = selectedItem?.itemType === "transaction"
@@ -6425,10 +6719,12 @@ function Reversals({ state, setState, actor, setConfirmDialog, setNotification }
           const persistedApprovals = approvalRecord.length && repository.isConfigured()
             ? await repository.createApprovalRequests({ groupId: state.groups[0]?.id, approvals: approvalRecord })
             : approvalRecord;
-          setState((current) => audit({
-            state: {
+          setState((current) => {
+            const nextTransactions = [created, ...current.transactions];
+            const affectedMember = current.members.find((m) => String(m.id) === String(selectedItem.memberId));
+            const nextState = {
               ...current,
-              transactions: [created, ...current.transactions],
+              transactions: nextTransactions,
               approvals: [...persistedApprovals, ...current.approvals],
               notifications: hasGroupApprovers
                 ? [
@@ -6436,13 +6732,22 @@ function Reversals({ state, setState, actor, setConfirmDialog, setNotification }
                     ...current.notifications
                   ]
                 : current.notifications
-            },
-            actor,
-            action: "reverse",
-            tableName: "member_transaction_header",
-            recordId: created.id,
-            newValue: created
-          }));
+            };
+            if (affectedMember) {
+              nextState.members = current.members.map((m) => String(m.id) === String(affectedMember.id)
+                ? { ...m, savings: calculateMemberLedgerSummary(m, { ...nextState, transactions: nextTransactions }).savings }
+                : m
+              );
+            }
+            return audit({
+              state: nextState,
+              actor,
+              action: "reverse",
+              tableName: "member_transaction_header",
+              recordId: created.id,
+              newValue: created
+            });
+          });
           setNotification({ type: "success", message: hasGroupApprovers ? "Reversal submitted for approval." : "Full reversal posted as a separate child entry." });
           setValues((current) => ({ ...current, reason: "" }));
           setTimeout(() => setNotification(null), 3000);
@@ -6458,14 +6763,14 @@ function Reversals({ state, setState, actor, setConfirmDialog, setNotification }
     <Page title="Reversals" subtitle="Cancel an entire wrong transaction with a full negative child entry" action={null}>
       <div className="two-column">
         <FormCard title="New reversal" onSubmit={submit}>
-          <SelectField
+          <ComboField
             label="Wrong transaction or loan"
             value={values.itemKey}
             onChange={(itemKey) => {
               setValues({ ...values, itemKey });
               setErrors({});
             }}
-            options={reversibleItems.map((item) => {
+            options={sortedReversibleItems.map((item) => {
               const member = state.members.find((entry) => String(entry.id) === String(item.memberId));
               const label = item.itemType === "loan"
                 ? `${item.startDate ?? ""} / ${member?.fullName ?? item.memberName ?? "Member"} / Loan ${currency.format(item.amount)} / ${item.loanNumber ?? item.id}`
@@ -6475,6 +6780,7 @@ function Reversals({ state, setState, actor, setConfirmDialog, setNotification }
                 value: item.key
               };
             })}
+            placeholder="Type to search..."
             error={errors.itemKey}
           />
           <Field label="Reversal date" type="date" value={values.reversalDate} onChange={(reversalDate) => setValues({ ...values, reversalDate })} />
@@ -6895,7 +7201,7 @@ function buildFinanceAgentContext(state, actor) {
       penaltyDue: row.penaltyDue,
       totalDue: row.totalDue
     })),
-    recentTransactions: getCompletedTransactions(state.transactions || [])
+    recentTransactions: getEffectiveCompletedTransactions(getCompletedTransactions(state.transactions || []))
       .slice(-20)
       .map((transaction) => ({
         date: transaction.transactionDate,
@@ -7846,11 +8152,12 @@ function Approvals({ state, setState, actor, setConfirmDialog, setNotification }
         if (allApproved) {
           if (target.referenceType === "transaction") {
             const transaction = nextState.transactions.find((item) => String(item.id) === String(target.referenceId));
+            const updatedTransactions = nextState.transactions.map((item) =>
+              String(item.id) === String(target.referenceId) ? { ...item, approvalStatus: "Completed" } : item
+            );
             nextState = {
               ...nextState,
-              transactions: nextState.transactions.map((item) =>
-                String(item.id) === String(target.referenceId) ? { ...item, approvalStatus: "Completed" } : item
-              )
+              transactions: updatedTransactions
             };
             if (transaction) {
               nextState = {
@@ -7858,7 +8165,7 @@ function Approvals({ state, setState, actor, setConfirmDialog, setNotification }
                 members: nextState.members.map((member) => String(member.id) === String(transaction.memberId)
                   ? {
                       ...member,
-                      savings: Number(member.savings || 0) + Number(transaction.allocation?.savings || 0),
+                      savings: calculateMemberLedgerSummary(member, { ...nextState, transactions: updatedTransactions }).savings,
                       loanOutstanding: Math.max(0, Number(member.loanOutstanding || 0) - Number(transaction.allocation?.principal || 0))
                     }
                   : member
@@ -8038,7 +8345,7 @@ function Reports({ state, actor, setNotification }) {
   const [draftEndDate, setDraftEndDate] = useState(todayIso);
   const [reportRange, setReportRange] = useState({ startDate: oldestReportDate, endDate: todayIso });
   const snapshotState = getStateTillDate(state, reportRange.endDate);
-  const rangeTransactions = getCompletedTransactions(snapshotState.transactions || [])
+  const rangeTransactions = getEffectiveCompletedTransactions(getCompletedTransactions(snapshotState.transactions || []))
     .filter((transaction) => isIsoDateInRange(transaction.transactionDate, reportRange.startDate, reportRange.endDate));
   const rangeExpenses = getCompletedTransactions(snapshotState.expenses || [])
     .filter((expense) => isIsoDateInRange(expense.transactionDate || expense.expenseDate || expense.createdAt, reportRange.startDate, reportRange.endDate));
@@ -8056,6 +8363,10 @@ function Reports({ state, actor, setNotification }) {
       + Number(transaction.allocation?.interest || 0)
       + Number(transaction.allocation?.penalty || 0);
   }, 0);
+  const shareByMemberInRange = getAccumulatedShareByMember(snapshotState, {
+    startDate: reportRange.startDate,
+    endDate: reportRange.endDate
+  });
   const groupGainInRange = Object.values(shareByMemberInRange).reduce((sum, amount) => sum + Number(amount || 0), 0);
   const groupExpensesInRange = rangeExpenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
   const groupWithdrawnInRange = rangeTransactions
@@ -8077,10 +8388,6 @@ function Reports({ state, actor, setNotification }) {
     map.set(memberId, existing);
     return map;
   }, new Map());
-  const shareByMemberInRange = getAccumulatedShareByMember(snapshotState, {
-    startDate: reportRange.startDate,
-    endDate: reportRange.endDate
-  });
 
   const memberSummaries = (snapshotState.members || []).map((member) => {
     const memberTransactions = rangeTransactions
@@ -8321,7 +8628,7 @@ function summarizeMemberCollectionRows(state, from, to, includeLoanColumns = fal
     });
   });
 
-  getCompletedTransactions(state.transactions || [])
+  getEffectiveCompletedTransactions(getCompletedTransactions(state.transactions || []))
     .filter((transaction) => isDateInWindow(transaction.transactionDate, from, to))
     .filter((transaction) => memberById[String(transaction.memberId)])
     .forEach((transaction) => {
