@@ -443,6 +443,26 @@ function App() {
 
   const location = useLocation();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const capacitor = typeof window !== "undefined" ? window.Capacitor : null;
+    const isNative = Boolean(capacitor?.isNativePlatform?.() || (capacitor?.platform && capacitor.platform !== "web"));
+    const app = capacitor?.App;
+    if (!isNative || !app?.addListener) return undefined;
+
+    const handleBack = (event) => {
+      // On native Android, use app navigation instead of exiting when possible.
+      if (location.pathname === "/" || location.pathname === "/select-group") {
+        return;
+      }
+      event?.preventDefault?.();
+      navigate(-1);
+    };
+
+    const listener = app.addListener("backButton", handleBack);
+    return () => listener?.remove?.();
+  }, [location.pathname, navigate]);
+
   const isProductOwner = state.session?.user?.email?.toLowerCase() === "katgroupsupport@gmail.com";
   const selectedGroup = state.groups.find((g) => String(g.id) === String(selectedGroupId)) ?? state.groups[0];
   const selectedGroupMember = (state.members || []).find((member) =>

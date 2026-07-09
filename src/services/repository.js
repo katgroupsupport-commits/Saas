@@ -29,6 +29,11 @@ function isProductOwnerEmail(email) {
   return String(email ?? "").toLowerCase() === "katgroupsupport@gmail.com";
 }
 
+function normalizeEmail(email) {
+  const normalized = String(email ?? "").trim().toLowerCase();
+  return normalized || null;
+}
+
 function periodStatus(value) {
   const normalized = String(value ?? "Open").toUpperCase();
   if (normalized === "OPEN") return "Open";
@@ -67,6 +72,34 @@ async function getAuthUser(client) {
   return sessionResult.session?.user ?? null;
 }
 
+async function findMemberForAuthUser(client, authUser) {
+  const email = normalizeEmail(authUser.email);
+  if (email) {
+    const { data: member, error } = await client
+      .from("members")
+      .select("*")
+      .ilike("email", email)
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    if (member) return member;
+  }
+
+  const mobile = String(authUser.user_metadata?.mobile_number || authUser.user_metadata?.mobile || authUser.phone || authUser.phone_number || "").trim();
+  if (mobile) {
+    const { data: member, error } = await client
+      .from("members")
+      .select("*")
+      .eq("mobile_number", mobile)
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    if (member) return member;
+  }
+
+  return null;
+}
+
 async function ensureProfile(authUser) {
   const client = requireClient();
   const metadata = authUser.user_metadata ?? {};
@@ -82,8 +115,19 @@ async function ensureProfile(authUser) {
   if (existingError) throw existingError;
   if (existing) {
     const updates = { last_login_date: new Date().toISOString() };
+    const authEmail = normalizeEmail(authUser.email);
+    if (authEmail && normalizeEmail(existing.email) !== authEmail) {
+      updates.email = authEmail;
+    }
+    if (fallbackMobile && existing.mobile_number !== fallbackMobile) {
+      updates.mobile_number = fallbackMobile;
+    }
     if (metadata.full_name && (!existing.username || existing.username === authUser.email?.split("@")[0])) {
       updates.username = metadata.full_name;
+    }
+    const member = await findMemberForAuthUser(client, authUser);
+    if (member && !existing.member_id) {
+      updates.member_id = member.member_id;
     }
     const { data: updated } = await client.from("auth_users").update(updates).eq("user_id", existing.user_id).select("*").single();
     return attachProfileMember(client, updated ?? existing);
@@ -96,6 +140,11 @@ async function ensureProfile(authUser) {
     mobile_number: fallbackMobile,
     status: "ACTIVE"
   };
+
+  const member = await findMemberForAuthUser(client, authUser);
+  if (member) {
+    payload.member_id = member.member_id;
+  }
 
   const { data, error } = await client.from("auth_users").insert([payload]).select("*").single();
   if (error) {
@@ -1449,8 +1498,9 @@ export const repository = {
     if (!profile) return initialState;
 
     const allMemberships = await fetchAll(client, "members", "*, role:roles(role_name)");
+    const profileEmail = normalizeEmail(profile.email);
     const ownMemberships = allMemberships.filter((member) => {
-      return member.email?.toLowerCase() === profile.email?.toLowerCase()
+      return normalizeEmail(member.email) === profileEmail
         || (member.mobile_number && member.mobile_number === profile.mobile_number)
         || member.member_id === profile.member_id;
     });
