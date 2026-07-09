@@ -45,35 +45,8 @@ export const initialState = {
 function mergeState(saved) {
   return {
     ...initialState,
-    ...saved,
-    session: {
-      ...initialState.session,
-      ...(saved?.session ?? {}),
-      user: {
-        ...initialState.session.user,
-        ...(saved?.session?.user ?? {})
-      }
-    },
-    groups: Array.isArray(saved?.groups) ? saved.groups : [],
-    members: Array.isArray(saved?.members) ? saved.members : [],
-    subscriptions: Array.isArray(saved?.subscriptions) ? saved.subscriptions : [],
-    periods: Array.isArray(saved?.periods) ? saved.periods : [],
-    loans: Array.isArray(saved?.loans) ? saved.loans : [],
-    approvals: Array.isArray(saved?.approvals) ? saved.approvals : [],
-    pendingSetupChanges: Array.isArray(saved?.pendingSetupChanges) ? saved.pendingSetupChanges : [],
-    notifications: Array.isArray(saved?.notifications) ? saved.notifications : [],
-    configurableFields: Array.isArray(saved?.configurableFields) ? saved.configurableFields : [],
-    transactions: Array.isArray(saved?.transactions) ? saved.transactions : [],
-    expenses: Array.isArray(saved?.expenses) ? saved.expenses : [],
-    withdrawalRequests: Array.isArray(saved?.withdrawalRequests) ? saved.withdrawalRequests : [],
-    auditLogs: Array.isArray(saved?.auditLogs) ? saved.auditLogs : [],
-    legacyMigration: saved?.legacyMigration ?? {},
-    legacyGroupOpenings: Array.isArray(saved?.legacyGroupOpenings) ? saved.legacyGroupOpenings : [],
-    legacyImports: Array.isArray(saved?.legacyImports) ? saved.legacyImports : [],
-    shareDistributions: Array.isArray(saved?.shareDistributions) ? saved.shareDistributions : [],
-    shareAdjustments: Array.isArray(saved?.shareAdjustments) ? saved.shareAdjustments : [],
-    disputes: Array.isArray(saved?.disputes) ? saved.disputes : [],
-    selectedGroupId: saved?.selectedGroupId ?? null
+    selectedGroupId: saved?.selectedGroupId ?? null,
+    searchQuery: typeof saved?.searchQuery === "string" ? saved.searchQuery : ""
   };
 }
 
@@ -89,7 +62,10 @@ export function loadState() {
 
 export function saveState(state) {
   try {
-    localStorage.setItem(key, JSON.stringify(state));
+    localStorage.setItem(key, JSON.stringify({
+      selectedGroupId: state.selectedGroupId ?? null,
+      searchQuery: state.searchQuery ?? ""
+    }));
   } catch {
     // Persistence is helpful for the demo, but the app should still render if storage is unavailable.
   }

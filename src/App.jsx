@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import {
   ArrowRightLeft,
@@ -442,6 +442,12 @@ function App() {
   const location = useLocation();
   const navigate = useNavigate();
 
+  const latestPathname = useRef(location.pathname);
+
+  useEffect(() => {
+    latestPathname.current = location.pathname;
+  }, [location.pathname]);
+
   useEffect(() => {
     const capacitor = typeof window !== "undefined" ? window.Capacitor : null;
     const isNative = Boolean(capacitor?.isNativePlatform?.() || (capacitor?.platform && capacitor.platform !== "web"));
@@ -449,17 +455,17 @@ function App() {
     if (!isNative || !app?.addListener) return undefined;
 
     const handleBack = (event) => {
-      event?.preventDefault?.();
-      // On native Android, use app navigation instead of exiting when possible.
-      if (location.pathname === "/" || location.pathname === "/select-group") {
+      const currentPath = latestPathname.current;
+      if (currentPath === "/" || currentPath === "/select-group") {
         return;
       }
+      event?.preventDefault?.();
       navigate(-1);
     };
 
     const listener = app.addListener("backButton", handleBack);
     return () => listener?.remove?.();
-  }, [location.pathname, navigate]);
+  }, [navigate]);
 
   const isProductOwner = state.session?.user?.email?.toLowerCase() === "katgroupsupport@gmail.com";
   const selectedGroup = state.groups.find((g) => String(g.id) === String(selectedGroupId)) ?? state.groups[0];
@@ -516,7 +522,7 @@ function App() {
   };
   const hasSelectedGroup = !!selectedGroup;
 
-  useEffect(() => saveState({ ...state, selectedGroupId, searchQuery }), [state, selectedGroupId, searchQuery]);
+  useEffect(() => saveState({ selectedGroupId, searchQuery }), [selectedGroupId, searchQuery]);
 
   useEffect(() => {
     const activeSection = sidebarSections.find((section) =>
@@ -560,13 +566,12 @@ function App() {
         const tenantData = await withTimeout(repository.listTenantData(), SUPABASE_BOOT_TIMEOUT_MS, "Tenant data loading");
         if (!active) return;
         const correctedTenantData = recalculateMemberSavingsFromEffectiveLedger(tenantData);
-        if (correctedTenantData.groups?.length > 0) {
-          const selectedStillExists = correctedTenantData.groups.some((group) => String(group.id) === String(selectedGroupId));
-          if (!selectedStillExists) {
-            setSelectedGroupId(correctedTenantData.groups[0].id);
-          }
+
+        const selectedStillExists = correctedTenantData.groups?.some((group) => String(group.id) === String(selectedGroupId));
+        if (!selectedStillExists && correctedTenantData.groups?.length > 0) {
+          setSelectedGroupId(correctedTenantData.groups[0].id);
         }
-        
+
         setState(() => ({
           ...correctedTenantData,
           session: { signedIn: true, user }
@@ -2739,7 +2744,7 @@ function GroupSelectionPage({ state, setState, selectedGroupId, setSelectedGroup
           setShowCreateForm(false);
           setNotification({ type: 'success', message: 'Group saved online.' });
           setTimeout(() => setNotification(null), 3000);
-          navigate('/', { replace: true });
+          navigate('/');
         } catch (error) {
           console.error('Create group failed', error);
           setNotification({ type: 'error', message: `Unable to save group online: ${error.message}` });
@@ -2836,7 +2841,8 @@ function GroupSelectionPage({ state, setState, selectedGroupId, setSelectedGroup
 
   function selectGroup(groupId) {
     setSelectedGroupId(groupId);
-    navigate("/", { replace: true });
+    saveState({ selectedGroupId: groupId, searchQuery });
+    navigate("/home");
   }
 
   return (
