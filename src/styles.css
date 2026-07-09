@@ -824,6 +824,10 @@ button:disabled {
   justify-content: center;
 }
 
+.simple-login-hero .secondary-button {
+  color: var(--ink);
+}
+
 .public-hero h1 {
   max-width: 760px;
   margin: 0;
@@ -888,6 +892,16 @@ button:disabled {
 .auth-panel p {
   color: var(--muted);
   margin: 8px 0 0;
+}
+
+.auth-panel .secondary-button {
+  color: var(--ink);
+  background: rgba(15, 118, 110, 0.08);
+  border-color: rgba(15, 118, 110, 0.18);
+}
+
+.auth-panel .secondary-button:hover {
+  background: rgba(15, 118, 110, 0.14);
 }
 
 .page-heading {

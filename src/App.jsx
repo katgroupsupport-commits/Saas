@@ -213,7 +213,6 @@ const setupHubButtons = [
   { to: "/members", label: "Add Members", Icon: Users },
   { to: "/setup/group", label: "Group Details", Icon: Landmark },
   { to: "/setup/member", label: "Member Details", Icon: User },
-  { to: "/setup/approval", label: "Approval Setup", Icon: ShieldCheck },
   { to: "/setup/roles", label: "Role Setup", Icon: Settings },
   { to: "/setup/loan", label: "Loan Setup", Icon: IndianRupee },
   { to: "/setup/periods", label: "Period Setup", Icon: CalendarCheck }
@@ -274,7 +273,6 @@ function buildSidebarSections(menu, role) {
       children: [
         { path: "/setup/group", label: "Group Setup" },
         { path: "/setup/member", label: "Member Setup" },
-        { path: "/setup/approval", label: "Approval Setup" },
         { path: "/setup/roles", label: "Role Setup" },
         { path: "/setup/loan", label: "Loan Setup" },
         { path: "/setup/periods", label: "Period Setup" },
@@ -451,11 +449,11 @@ function App() {
     if (!isNative || !app?.addListener) return undefined;
 
     const handleBack = (event) => {
+      event?.preventDefault?.();
       // On native Android, use app navigation instead of exiting when possible.
       if (location.pathname === "/" || location.pathname === "/select-group") {
         return;
       }
-      event?.preventDefault?.();
       navigate(-1);
     };
 
@@ -665,7 +663,7 @@ function App() {
       const correctedTenantData = recalculateMemberSavingsFromEffectiveLedger(tenantData);
       setState({ ...correctedTenantData, session: { signedIn: true, user: signedInUser } });
       syncMemberSavingsCorrectionsToSupabase(correctedTenantData).catch(err => console.error("Sync failed:", err));
-      navigate("/select-group", { replace: true });
+      navigate("/select-group");
       return;
     }
 
@@ -818,10 +816,19 @@ function App() {
         <header className="topbar">
           <div className="topbar-title">
             <div>
-              <h1>प्रगती (Finance Console)</h1>
-              <div className="group-header">
-                <span>{selectedGroup?.name ?? "No group selected"}</span>
-                {selectedGroup?.code && <small className="brand-code">{selectedGroup.code}</small>}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <h1 style={{ margin: 0, fontSize: 'inherit', fontWeight: 700, letterSpacing: '0.02em', textShadow: '1px 1px 0 rgba(0,0,0,0.12), 2px 2px 0 rgba(0,0,0,0.08)', color: 'var(--text)' }}>
+                  प्रगती Finance Console
+                </h1>
+                <div className="group-header" style={{ marginTop: '8px' }}>
+                  <span>{selectedGroup?.name ?? "No group selected"}</span>
+                  {selectedGroup?.code && <small className="brand-code">{selectedGroup.code}</small>}
+                </div>
+                {selectedGroup && (
+                  <p className="section-note" style={{ marginTop: '6px', fontSize: '0.95rem' }}>
+                    Created by: {selectedGroup.creatorName || selectedGroup.primaryContactName || "Unknown"}
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -945,8 +952,8 @@ function App() {
           <Route path="/settings" element={role === roles.MEMBER ? <Navigate replace to="/home" /> : <SettingsPage state={viewState} setState={patchState} actor={state.session.user} setConfirmDialog={setConfirmDialog} setNotification={setNotification} />} />
           <Route path="/setup/group" element={role === roles.MEMBER ? <Navigate replace to="/home" /> : <SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="group" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} ensureLatestTenantData={ensureLatestTenantData} />} />
           <Route path="/setup/member" element={role === roles.MEMBER ? <Navigate replace to="/home" /> : <SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="member" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} ensureLatestTenantData={ensureLatestTenantData} />} />
-          <Route path="/setup/financial" element={role === roles.MEMBER ? <Navigate replace to="/home" /> : <SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="financial" initialFinancialTab="approvers" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} ensureLatestTenantData={ensureLatestTenantData} />} />
-          <Route path="/setup/approval" element={role === roles.MEMBER ? <Navigate replace to="/home" /> : <SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="financial" initialFinancialTab="approvers" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} ensureLatestTenantData={ensureLatestTenantData} />} />
+          <Route path="/setup/financial" element={role === roles.MEMBER ? <Navigate replace to="/home" /> : <SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="financial" initialFinancialTab="roles" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} ensureLatestTenantData={ensureLatestTenantData} />} />
+          <Route path="/setup/approval" element={role === roles.MEMBER ? <Navigate replace to="/home" /> : <Navigate replace to="/setup/roles" />} />
           <Route path="/setup/loan" element={role === roles.MEMBER ? <Navigate replace to="/home" /> : <SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="financial" initialFinancialTab="loan" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} ensureLatestTenantData={ensureLatestTenantData} />} />
           <Route path="/setup/periods" element={role === roles.MEMBER ? <Navigate replace to="/home" /> : <SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="financial" initialFinancialTab="period" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} ensureLatestTenantData={ensureLatestTenantData} />} />
           <Route path="/setup/roles" element={role === roles.MEMBER ? <Navigate replace to="/home" /> : <SetupPage state={viewState} setState={patchState} actor={state.session.user} selectedGroup={selectedGroup} initialSetupTab="financial" initialFinancialTab="roles" setConfirmDialog={setConfirmDialog} setNotification={setNotification} migrationLoading={migrationLoading} setMigrationLoading={setMigrationLoading} ensureLatestTenantData={ensureLatestTenantData} />} />
@@ -1322,7 +1329,7 @@ function QaGuide() {
     ["Where should I start after login?", "First create or select a group, add members, set group setup, set approvers/admins, open the current period, then start entering transactions."],
     ["What is group setup?", "Group setup stores common rules like monthly saving, interest rate, penalty after due date, loan limit, loan tenure and repayment due date."],
     ["What is member setup?", "Member setup is used only when one member has different saving amount, loan limit, interest rate or loan tenure from the group default. Email, mobile and profile details are optional."],
-    ["What is approval setup?", "Approval setup decides who must approve setup changes, transactions, loans, withdrawals and corrections before they affect dashboards."],
+    ["What is role setup?", "Role setup decides who must approve setup changes, transactions, loans, withdrawals and corrections and who can manage setup and operations before they affect dashboards."],
     ["Why should I set at least one admin?", "An active admin is needed to manage setup, members, operations and approvals. The app blocks setup changes if no active admin remains."],
     ["How do members login?", "Members can login only when their email is added. Email is optional, but for member app access add the member email and ask them to register with the same email."],
     ["Can I add old notebook data?", "Yes. Use the calculator for old data. Enter migration date and old balances, calculate per-member share, then post that share as Saving from Transactions."],
@@ -1393,9 +1400,9 @@ function GuideContent() {
     },
     {
       title: "3. Set approvers and admins",
-      text: "Choose approvers for loans, transactions and corrections. Choose admins who can manage setup and operations. Save and confirm that the setup approval is Completed before depending on the workflow.",
-      path: "/setup/approval",
-      action: "Set approvals"
+      text: "Choose approvers for loans, transactions and corrections. Choose admins who can manage setup and operations. Save and confirm that setup is completed before depending on the workflow.",
+      path: "/setup/roles",
+      action: "Set roles"
     },
     {
       title: "4. Open the period",
@@ -1436,7 +1443,7 @@ function GuideContent() {
   ];
   const flows = [
     ["Register", "Create group", "Add members", "Open period"],
-    ["Group setup", "Member setup", "Loan setup", "Approver setup"],
+    ["Group setup", "Member setup", "Loan setup", "Role setup"],
     ["Enter legacy values", "Calculate per member share", "Post as saving transaction", "Approve to Completed"],
     ["Enter savings", "System splits amount", "Approver checks", "Completed updates dashboard"],
     ["Member asks loan", "Admin/approver approves", "Loan active", "Repay monthly"],
@@ -1519,7 +1526,7 @@ function GuideContent() {
           <span>Group setup: default monthly saving, interest rate, penalty, loan limit</span>
           <span>Member setup: use only when one member has different saving or loan limit</span>
           <span>Financial setup: repayment due date means monthly payment date</span>
-          <span>Approver setup: add people who must approve loans or money entries</span>
+          <span>Role setup: assign approvers and admins from the same screen</span>
         </div>
         <div className="guide-screen-grid">
           <article className="guide-screen"><div className="guide-screen-top"><span /><span /><span /></div><strong>Interest rate</strong><p>Enter monthly percent. Example: 2 means 2% per month.</p></article>
@@ -2638,6 +2645,13 @@ function saveHiddenGroupIds(actor, ids) {
 function GroupSelectionPage({ state, setState, selectedGroupId, setSelectedGroupId, actor, setConfirmDialog, setNotification }) {
   const navigate = useNavigate();
   const [showCreateForm, setShowCreateForm] = useState(state.groups.length === 0);
+  const goBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+    navigate("/", { replace: true });
+  };
   const [showHiddenGroups, setShowHiddenGroups] = useState(false);
   const [values, setValues] = useState({
     name: "",
@@ -2828,9 +2842,14 @@ function GroupSelectionPage({ state, setState, selectedGroupId, setSelectedGroup
   return (
     <div className="page">
       <div className="page-header">
-        <div>
-          <h1>Select a group</h1>
-          <p>Choose which Bachat Gat group you want to work with</p>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
+          <div>
+            <h1>Select a group</h1>
+            <p>Choose which Bachat Gat group you want to work with</p>
+          </div>
+          <button type="button" className="secondary-button" onClick={goBack}>
+            Back
+          </button>
         </div>
       </div>
 
@@ -3493,7 +3512,7 @@ function Subscriptions({ state, setState, actor, selectedGroup, setConfirmDialog
   );
 }
 
-function SetupPage({ state, setState, actor, selectedGroup, initialSetupTab = "group", initialFinancialTab = "approvers", setConfirmDialog, setNotification, migrationLoading, setMigrationLoading, ensureLatestTenantData }) {
+function SetupPage({ state, setState, actor, selectedGroup, initialSetupTab = "group", initialFinancialTab = "roles", setConfirmDialog, setNotification, migrationLoading, setMigrationLoading, ensureLatestTenantData }) {
   useEffect(() => { ensureLatestTenantData(); }, [ensureLatestTenantData]);
   const setupLocation = useLocation();
   const group = selectedGroup ?? state.groups[0];
@@ -4183,8 +4202,7 @@ function SetupPage({ state, setState, actor, selectedGroup, initialSetupTab = "g
     { key: "financial", label: "Finance", description: "Controls", icon: SlidersHorizontal }
   ];
   const financialTabs = [
-    { key: "approvers", label: "Approvers", description: "Workflow", icon: ShieldCheck },
-    { key: "roles", label: "Roles", description: "Admins", icon: Users },
+    { key: "roles", label: "Role Setup", description: "Approvers + admins", icon: Settings },
     { key: "loan", label: "Loans", description: "Interest", icon: IndianRupee },
     { key: "period", label: "Periods", description: "Month close", icon: CalendarCheck },
     { key: "calculator", label: "Calculator", description: "Shares", icon: Calculator }
@@ -4411,37 +4429,33 @@ function SetupPage({ state, setState, actor, selectedGroup, initialSetupTab = "g
             })}
           </div>}
 
-          {financialTab === "approvers" && (
-            <FormCard title="Approver setup" onSubmit={saveGroupSetup}>
-              <p className="section-note">Select members who will act as approvers for group workflows.</p>
-              <div className="checkbox-list">
-                {state.members.map((member) => (
-                  <label key={member.id} className="checkbox-item">
-                    <input
-                      type="checkbox"
-                      checked={groupValues.approvers.includes(member.fullName)}
-                      onChange={() => toggleApprover(member.fullName)}
-                    />
-                    {member.fullName}
-                  </label>
-                ))}
-              </div>
-            </FormCard>
-          )}
-
           {financialTab === "roles" && (
-            <FormCard title="Admin setup" onSubmit={saveGroupSetup}>
-              <p className="section-note">Select one or more members who should be group admins.</p>
-              <div className="checkbox-list">
+            <FormCard title="Role setup" onSubmit={saveGroupSetup}>
+              <p className="section-note">Assign approver and admin access to members from the same screen.</p>
+              <div style={{ display: 'grid', gap: '12px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px', gap: '12px', fontWeight: 600, padding: '10px 0', borderBottom: '2px solid rgba(0,0,0,0.12)', alignItems: 'center' }}>
+                  <span>Member</span>
+                  <span style={{ textAlign: 'center' }}>Approver</span>
+                  <span style={{ textAlign: 'center' }}>Admin</span>
+                </div>
                 {state.members.map((member) => (
-                  <label key={member.id} className="checkbox-item">
-                    <input
-                      type="checkbox"
-                      checked={groupValues.admins.includes(member.fullName) || member.memberRole === roles.GROUP_ADMIN || member.role === roles.GROUP_ADMIN}
-                      onChange={() => toggleAdmin(member.fullName)}
-                    />
-                    {member.fullName}
-                  </label>
+                  <div key={member.id} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px', gap: '12px', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
+                    <span>{member.fullName}</span>
+                    <div style={{ display: 'flex', justifyContent: 'center' }}>
+                      <input
+                        type="checkbox"
+                        checked={groupValues.approvers.includes(member.fullName)}
+                        onChange={() => toggleApprover(member.fullName)}
+                      />
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'center' }}>
+                      <input
+                        type="checkbox"
+                        checked={groupValues.admins.includes(member.fullName) || member.memberRole === roles.GROUP_ADMIN || member.role === roles.GROUP_ADMIN}
+                        onChange={() => toggleAdmin(member.fullName)}
+                      />
+                    </div>
+                  </div>
                 ))}
               </div>
             </FormCard>
@@ -6972,91 +6986,19 @@ function ShareDistributionHistory({ state }) {
 }
 
 function ContactSupport({ state, setState, actor, setNotification }) {
-  const [values, setValues] = useState({
-    issue: "",
-    contactNumber: actor?.mobile ?? "",
-    attachmentName: "",
-    attachmentData: ""
-  });
-  const group = state.groups[0];
-
-  async function submit(event) {
-    event.preventDefault();
-    if (!values.issue.trim() || !values.contactNumber.trim()) {
-      setNotification({ type: "error", message: "Issue and contact number are required." });
-      setTimeout(() => setNotification(null), 3000);
-      return;
-    }
-    try {
-      const createdDispute = await repository.createDispute({
-        groupId: group?.id,
-        memberId: actor?.memberId,
-        groupName: group?.name ?? "",
-        memberName: actor?.name ?? actor?.email ?? "",
-        contactNumber: values.contactNumber,
-        issue: values.issue,
-        attachmentName: values.attachmentName,
-        attachmentData: values.attachmentData
-      });
-      setState((current) => ({ ...current, disputes: [createdDispute, ...(current.disputes || [])] }));
-      setNotification({ type: "success", message: "Dispute request saved for product owner review." });
-      setValues({ issue: "", contactNumber: actor?.mobile ?? "", attachmentName: "", attachmentData: "" });
-    } catch (error) {
-      setNotification({ type: "error", message: `Unable to save dispute: ${error.message}`, details: serializeError(error) });
-    }
-  }
-
   return (
-    <Page title="Contact" subtitle="Raise app-related disputes with group and member context" action={null}>
-      <FormCard title="New dispute request" onSubmit={submit}>
-        <Field label="Group" value={group?.name ?? ""} onChange={() => {}} />
-        <Field label="Member" value={actor?.name ?? actor?.email ?? ""} onChange={() => {}} />
-        <Field label="Issue" value={values.issue} onChange={(issue) => setValues({ ...values, issue })} />
-        <Field label="Contact number" value={values.contactNumber} onChange={(contactNumber) => setValues({ ...values, contactNumber })} />
-        <label className="field">
-          <span>Attachment optional</span>
-          <input type="file" onChange={(event) => {
-            const file = event.target.files?.[0];
-            if (!file) {
-              setValues({ ...values, attachmentName: "", attachmentData: "" });
-              return;
-            }
-            const reader = new FileReader();
-            reader.onload = () => setValues((current) => ({ ...current, attachmentName: file.name, attachmentData: String(reader.result || "") }));
-            reader.readAsDataURL(file);
-          }} />
-        </label>
-      </FormCard>
-      <Section title="Your dispute conversations">
-        <div className="chat-list">
-          {(state.disputes || []).length === 0 ? (
-            <p className="section-note">No disputes raised for this group.</p>
-          ) : (state.disputes || []).map((dispute) => (
-            <article className="chat-window" key={dispute.dispute_id ?? dispute.id}>
-              <div className="chat-meta">
-                <strong>{dispute.group_name || state.groups[0]?.name || "Group"}</strong>
-                <span className="pill">{dispute.status}</span>
-              </div>
-              <div className="chat-bubble chat-sent">
-                <small>You sent</small>
-                <p>{dispute.issue}</p>
-              </div>
-              {dispute.owner_reply ? (
-                <div className="chat-bubble chat-reply">
-                  <small>Support replied</small>
-                  <p>{dispute.owner_reply}</p>
-                </div>
-              ) : (
-                <div className="chat-bubble chat-waiting">
-                  <small>Support</small>
-                  <p>Waiting for reply.</p>
-                </div>
-              )}
-              {dispute.attachment_name && <p className="section-note">Attachment: {dispute.attachment_name}</p>}
-            </article>
-          ))}
-        </div>
-      </Section>
+    <Page title="Contact" subtitle="Reach support" action={null}>
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '30px 0' }}>
+        <a
+          className="primary-button"
+          href="https://wa.me/7218192017"
+          target="_blank"
+          rel="noreferrer"
+          style={{ minWidth: '220px', textAlign: 'center' }}
+        >
+          Contact via WhatsApp
+        </a>
+      </div>
     </Page>
   );
 }
