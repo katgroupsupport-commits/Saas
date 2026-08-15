@@ -454,41 +454,48 @@ select setval(pg_get_serial_sequence('public.xxfp_pending_setup_changes', 'setup
 select setval(pg_get_serial_sequence('public.xxfp_doc_sequences', 'doc_sequence_id'), coalesce((select max(doc_sequence_id) from public.xxfp_doc_sequences), 1), true);
 
 -- =============================================================================
--- D. DROP OLD PHYSICAL TABLES (no compatibility views are recreated - the
---    consolidated RPCs and the application read the XXFP_ tables directly)
+-- D. DROP OLD PHYSICAL TABLES / COMPAT VIEWS (no compatibility views are
+--    recreated - the consolidated RPCs and the application read the XXFP_
+--    tables directly). Handles both leftover physical tables and views created
+--    by an earlier run of this migration.
 -- =============================================================================
 drop view if exists public.member_dashboard_balances cascade;
 drop view if exists public.group_dashboard_balances cascade;
 drop view if exists public.v_completed_member_transaction_history cascade;
 drop view if exists public.v_completed_legacy_member_history cascade;
 
-drop table if exists public.group_subscriptions cascade;
-drop table if exists public.subscription_plans cascade;
-drop table if exists public.trx_audit_history cascade;
-drop table if exists public.share_adjustments cascade;
-drop table if exists public.share_distribution cascade;
-drop table if exists public.group_expense_lines cascade;
-drop table if exists public.group_expense_header cascade;
-drop table if exists public.legacy_data cascade;
-drop table if exists public.approvals cascade;
-drop table if exists public.loan_repayment_schedule cascade;
-drop table if exists public.loan_distribution cascade;
-drop table if exists public.loan_requests cascade;
-drop table if exists public.member_transaction_lines cascade;
-drop table if exists public.member_transaction_header cascade;
-drop table if exists public.periods cascade;
-drop table if exists public.member_setup cascade;
-drop table if exists public.group_setup cascade;
-drop table if exists public.member_status_history cascade;
-drop table if exists public.auth_users cascade;
-drop table if exists public.members cascade;
-drop table if exists public.groups cascade;
-drop table if exists public.roles cascade;
-drop table if exists public.pending_setup_changes cascade;
-drop table if exists public.withdrawal_requests cascade;
-drop table if exists public.support_disputes cascade;
-drop table if exists public.legacy_group_opening cascade;
-drop table if exists public.document_sequences cascade;
+do $$
+declare
+  obj record;
+  relkind char;
+begin
+  for obj in select unnest(array[
+    'group_subscriptions', 'subscription_plans', 'trx_audit_history',
+    'share_adjustments', 'share_distribution', 'group_expense_lines',
+    'group_expense_header', 'legacy_data', 'approvals',
+    'loan_repayment_schedule', 'loan_distribution', 'loan_requests',
+    'member_transaction_lines', 'member_transaction_header', 'periods',
+    'member_setup', 'group_setup', 'member_status_history', 'auth_users',
+    'members', 'groups', 'roles', 'pending_setup_changes',
+    'withdrawal_requests', 'support_disputes', 'legacy_group_opening',
+    'document_sequences'
+  ]) as name
+  loop
+    select c.relkind into relkind
+    from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and c.relname = obj.name
+    limit 1;
+
+    if relkind in ('r', 'p') then
+      execute format('drop table if exists public.%I cascade', obj.name);
+    elsif relkind = 'v' then
+      execute format('drop view if exists public.%I cascade', obj.name);
+    elsif relkind = 'm' then
+      execute format('drop materialized view if exists public.%I cascade', obj.name);
+    end if;
+  end loop;
+end $$;
 
 -- =============================================================================
 -- F. DASHBOARD BALANCE VIEWS  (canonical xxfp_v_* names only)
