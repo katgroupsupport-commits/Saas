@@ -94,39 +94,41 @@ begin
   -- ---------------------------------------------------------------------------
   -- A2. Persons
   -- ---------------------------------------------------------------------------
-  insert into public.xxfp_persons (person_id, person_number, full_name, username, email, mobile_number, auth_user_id, status, profile_photo_data, created_by, creation_date, last_updated_by, last_update_date)
-  overriding system value
-  select
-    mp.person_id,
-    'P' || lpad(mp.person_id::text, 8, '0'),
-    coalesce(m.member_name, ''),
-    m.username,
-    m.email,
-    m.mobile_number,
-    au.supabase_user_id,
-    case
-      when exists (
-        select 1
-        from public.members x
-        join tmp_member_to_person y on y.member_id = x.member_id
-        where y.person_id = mp.person_id and upper(x.status) = 'ACTIVE'
-      ) then 'ACTIVE'
-      else 'INACTIVE'
-    end,
-    m.profile_photo_data,
-    m.created_by,
-    m.creation_date,
-    m.last_updated_by,
-    m.last_update_date
-  from tmp_member_to_person mp
-  join public.members m on m.member_id = mp.person_id
-  left join public.auth_users au on au.member_id = mp.person_id
-  on conflict (person_id) do nothing;
+  if to_regclass('public.auth_users') is not null then
+    insert into public.xxfp_persons (person_id, person_number, full_name, username, email, mobile_number, auth_user_id, status, profile_photo_data, created_by, creation_date, last_updated_by, last_update_date)
+    overriding system value
+    select
+      mp.person_id,
+      'P' || lpad(mp.person_id::text, 8, '0'),
+      coalesce(m.member_name, ''),
+      m.username,
+      m.email,
+      m.mobile_number,
+      au.supabase_user_id,
+      case
+        when exists (
+          select 1
+          from public.members x
+          join tmp_member_to_person y on y.member_id = x.member_id
+          where y.person_id = mp.person_id and upper(x.status) = 'ACTIVE'
+        ) then 'ACTIVE'
+        else 'INACTIVE'
+      end,
+      m.profile_photo_data,
+      m.created_by,
+      m.creation_date,
+      m.last_updated_by,
+      m.last_update_date
+    from tmp_member_to_person mp
+    join public.members m on m.member_id = mp.person_id
+    left join public.auth_users au on au.member_id = mp.person_id
+    on conflict (person_id) do nothing;
+  end if;
 
   -- ---------------------------------------------------------------------------
   -- A3. Groups (owner = person behind the creating auth user)
   -- ---------------------------------------------------------------------------
-  if to_regclass('public.groups') is not null then
+  if to_regclass('public.groups') is not null and to_regclass('public.auth_users') is not null then
     insert into public.xxfp_groups (group_id, group_name, code, primary_contact_name, mobile_number, email, status, owner_person_id, created_by, creation_date, last_updated_by, last_update_date)
   overriding system value
     select
