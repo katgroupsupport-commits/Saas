@@ -1,4 +1,4 @@
--- =============================================================================
+﻿-- =============================================================================
 -- Bachat Gat SaaS - XXFP_ packages: procedures, triggers, RLS and grants
 -- Date: 2026-08-16
 --
@@ -2057,23 +2057,30 @@ alter table public.xxfp_stg_trx_imp enable row level security;
 -- ---------------------------------------------------------------------------
 -- 7b. Master / lookup tables
 -- ---------------------------------------------------------------------------
+drop policy if exists xxfp_roles_read on public.xxfp_roles;
 create policy xxfp_roles_read on public.xxfp_roles
 for select to authenticated using (true);
+drop policy if exists xxfp_roles_owner_manage on public.xxfp_roles;
 create policy xxfp_roles_owner_manage on public.xxfp_roles
 for all to authenticated using (public.is_product_owner()) with check (public.is_product_owner());
 
+drop policy if exists xxfp_persons_read on public.xxfp_persons;
 create policy xxfp_persons_read on public.xxfp_persons
 for select to authenticated using (true);
+drop policy if exists xxfp_persons_self_update on public.xxfp_persons;
 create policy xxfp_persons_self_update on public.xxfp_persons
 for update to authenticated
 using (auth_user_id = (select auth.uid())) with check (auth_user_id = (select auth.uid()));
 
+drop policy if exists xxfp_auth_users_read_own_or_owner on public.xxfp_auth_users;
 create policy xxfp_auth_users_read_own_or_owner on public.xxfp_auth_users
 for select to authenticated
 using (public.is_product_owner() or supabase_user_id = (select auth.uid()) or user_id = public.current_auth_user_id());
+drop policy if exists xxfp_auth_users_insert_own on public.xxfp_auth_users;
 create policy xxfp_auth_users_insert_own on public.xxfp_auth_users
 for insert to authenticated
 with check (supabase_user_id = (select auth.uid()));
+drop policy if exists xxfp_auth_users_update_own_or_owner on public.xxfp_auth_users;
 create policy xxfp_auth_users_update_own_or_owner on public.xxfp_auth_users
 for update to authenticated
 using (public.is_product_owner() or supabase_user_id = (select auth.uid()))
@@ -2082,71 +2089,90 @@ with check (public.is_product_owner() or supabase_user_id = (select auth.uid()))
 -- ---------------------------------------------------------------------------
 -- 7c. Group-scoped tables
 -- ---------------------------------------------------------------------------
+drop policy if exists xxfp_groups_read_tenant on public.xxfp_groups;
 create policy xxfp_groups_read_tenant on public.xxfp_groups
 for select to authenticated
 using (public.is_product_owner() or group_id in (select public.user_group_ids()) or created_by = public.current_auth_user_id());
+drop policy if exists xxfp_groups_insert_own on public.xxfp_groups;
 create policy xxfp_groups_insert_own on public.xxfp_groups
 for insert to authenticated
 with check (public.is_product_owner() or created_by = public.current_auth_user_id());
+drop policy if exists xxfp_groups_update_admin on public.xxfp_groups;
 create policy xxfp_groups_update_admin on public.xxfp_groups
 for update to authenticated
 using (public.is_group_admin(group_id)) with check (public.is_group_admin(group_id));
+drop policy if exists xxfp_groups_delete_owner_only on public.xxfp_groups;
 create policy xxfp_groups_delete_owner_only on public.xxfp_groups
 for delete to authenticated
 using (public.is_product_owner());
 
+drop policy if exists xxfp_members_read_tenant on public.xxfp_group_members;
 create policy xxfp_members_read_tenant on public.xxfp_group_members
 for select to authenticated
 using (public.is_group_member(group_id));
+drop policy if exists xxfp_members_insert_admin on public.xxfp_group_members;
 create policy xxfp_members_insert_admin on public.xxfp_group_members
 for insert to authenticated
 with check (public.is_group_admin(group_id));
+drop policy if exists xxfp_members_update_admin_or_self on public.xxfp_group_members;
 create policy xxfp_members_update_admin_or_self on public.xxfp_group_members
 for update to authenticated
 using (public.is_group_admin(group_id) or member_id in (select public.current_member_ids()))
 with check (public.is_group_admin(group_id) or member_id in (select public.current_member_ids()));
+drop policy if exists xxfp_members_delete_admin on public.xxfp_group_members;
 create policy xxfp_members_delete_admin on public.xxfp_group_members
 for delete to authenticated
 using (public.is_group_admin(group_id));
 
+drop policy if exists xxfp_member_status_read_tenant on public.xxfp_member_status_history;
 create policy xxfp_member_status_read_tenant on public.xxfp_member_status_history
 for select to authenticated
 using (public.is_group_member(group_id));
+drop policy if exists xxfp_member_status_manage_admin on public.xxfp_member_status_history;
 create policy xxfp_member_status_manage_admin on public.xxfp_member_status_history
 for all to authenticated
 using (public.is_group_admin(group_id)) with check (public.is_group_admin(group_id));
 
+drop policy if exists xxfp_group_setup_read_tenant on public.xxfp_group_setup;
 create policy xxfp_group_setup_read_tenant on public.xxfp_group_setup
 for select to authenticated
 using (public.is_group_member(group_id));
+drop policy if exists xxfp_group_setup_manage_admin on public.xxfp_group_setup;
 create policy xxfp_group_setup_manage_admin on public.xxfp_group_setup
 for all to authenticated
 using (public.is_group_admin(group_id)) with check (public.is_group_admin(group_id));
 
+drop policy if exists xxfp_member_setup_read_tenant on public.xxfp_member_setup;
 create policy xxfp_member_setup_read_tenant on public.xxfp_member_setup
 for select to authenticated
 using (public.is_group_member(public.member_group_id(member_id)));
+drop policy if exists xxfp_member_setup_manage_admin on public.xxfp_member_setup;
 create policy xxfp_member_setup_manage_admin on public.xxfp_member_setup
 for all to authenticated
 using (public.is_group_admin(public.member_group_id(member_id)))
 with check (public.is_group_admin(public.member_group_id(member_id)));
 
+drop policy if exists xxfp_periods_read_tenant on public.xxfp_periods;
 create policy xxfp_periods_read_tenant on public.xxfp_periods
 for select to authenticated
 using (public.is_group_member(group_id));
+drop policy if exists xxfp_periods_manage_admin on public.xxfp_periods;
 create policy xxfp_periods_manage_admin on public.xxfp_periods
 for all to authenticated
 using (public.is_group_admin(group_id)) with check (public.is_group_admin(group_id));
 
+drop policy if exists xxfp_trx_header_read_tenant on public.xxfp_trx_header;
 create policy xxfp_trx_header_read_tenant on public.xxfp_trx_header
 for select to authenticated
 using (public.is_group_member(group_id));
+drop policy if exists xxfp_trx_header_insert_admin_or_self on public.xxfp_trx_header;
 create policy xxfp_trx_header_insert_admin_or_self on public.xxfp_trx_header
 for insert to authenticated
 with check (
   public.is_group_admin(group_id)
   or (public.is_group_member(group_id) and member_id in (select public.current_member_ids()))
 );
+drop policy if exists xxfp_trx_header_update_pending_admin_or_approver on public.xxfp_trx_header;
 create policy xxfp_trx_header_update_pending_admin_or_approver on public.xxfp_trx_header
 for update to authenticated
 using (
@@ -2155,45 +2181,56 @@ using (
 )
 with check (public.is_group_approver(group_id));
 
+drop policy if exists xxfp_trx_lines_read_tenant on public.xxfp_trx_lines;
 create policy xxfp_trx_lines_read_tenant on public.xxfp_trx_lines
 for select to authenticated
 using (public.is_group_member(public.transaction_group_id(member_trx_id)));
+drop policy if exists xxfp_trx_lines_insert_tenant on public.xxfp_trx_lines;
 create policy xxfp_trx_lines_insert_tenant on public.xxfp_trx_lines
 for insert to authenticated
 with check (public.is_group_member(public.transaction_group_id(member_trx_id)));
+drop policy if exists xxfp_trx_lines_update_pending_admin_or_approver on public.xxfp_trx_lines;
 create policy xxfp_trx_lines_update_pending_admin_or_approver on public.xxfp_trx_lines
 for update to authenticated
 using (public.is_group_approver(public.transaction_group_id(member_trx_id)))
 with check (public.is_group_approver(public.transaction_group_id(member_trx_id)));
 
+drop policy if exists xxfp_loan_requests_read_tenant on public.xxfp_loan_requests;
 create policy xxfp_loan_requests_read_tenant on public.xxfp_loan_requests
 for select to authenticated
 using (public.is_group_member(group_id));
+drop policy if exists xxfp_loan_requests_insert_admin_or_self on public.xxfp_loan_requests;
 create policy xxfp_loan_requests_insert_admin_or_self on public.xxfp_loan_requests
 for insert to authenticated
 with check (
   public.is_group_admin(group_id)
   or (public.is_group_member(group_id) and member_id in (select public.current_member_ids()))
 );
+drop policy if exists xxfp_loan_requests_update_admin_or_approver on public.xxfp_loan_requests;
 create policy xxfp_loan_requests_update_admin_or_approver on public.xxfp_loan_requests
 for update to authenticated
 using (public.is_group_approver(group_id)) with check (public.is_group_approver(group_id));
 
+drop policy if exists xxfp_loan_header_read_tenant on public.xxfp_loan_header;
 create policy xxfp_loan_header_read_tenant on public.xxfp_loan_header
 for select to authenticated
 using (public.is_group_member(group_id));
+drop policy if exists xxfp_loan_header_manage_admin_or_approver on public.xxfp_loan_header;
 create policy xxfp_loan_header_manage_admin_or_approver on public.xxfp_loan_header
 for all to authenticated
 using (public.is_group_approver(group_id)) with check (public.is_group_approver(group_id));
 
+drop policy if exists xxfp_loan_schedule_read_tenant on public.xxfp_loan_schedule;
 create policy xxfp_loan_schedule_read_tenant on public.xxfp_loan_schedule
 for select to authenticated
 using (public.is_group_member(public.loan_group_id(loan_id)));
+drop policy if exists xxfp_loan_schedule_manage_admin_or_approver on public.xxfp_loan_schedule;
 create policy xxfp_loan_schedule_manage_admin_or_approver on public.xxfp_loan_schedule
 for all to authenticated
 using (public.is_group_approver(public.loan_group_id(loan_id)))
 with check (public.is_group_approver(public.loan_group_id(loan_id)));
 
+drop policy if exists xxfp_approvals_read_assigned_or_tenant_admin on public.xxfp_approval_header;
 create policy xxfp_approvals_read_assigned_or_tenant_admin on public.xxfp_approval_header
 for select to authenticated
 using (
@@ -2201,9 +2238,11 @@ using (
   or approver_member_id in (select public.current_member_ids())
   or public.is_group_admin(group_id)
 );
+drop policy if exists xxfp_approvals_insert_admin on public.xxfp_approval_header;
 create policy xxfp_approvals_insert_admin on public.xxfp_approval_header
 for insert to authenticated
 with check (public.is_group_admin(group_id));
+drop policy if exists xxfp_approvals_update_assigned on public.xxfp_approval_header;
 create policy xxfp_approvals_update_assigned on public.xxfp_approval_header
 for update to authenticated
 using (
@@ -2217,43 +2256,54 @@ with check (
   or public.is_group_admin(group_id)
 );
 
+drop policy if exists xxfp_legacy_data_read_tenant on public.xxfp_legacy_data;
 create policy xxfp_legacy_data_read_tenant on public.xxfp_legacy_data
 for select to authenticated
 using (public.is_group_member(group_id));
+drop policy if exists xxfp_legacy_data_manage_admin on public.xxfp_legacy_data;
 create policy xxfp_legacy_data_manage_admin on public.xxfp_legacy_data
 for all to authenticated
 using (public.is_group_admin(group_id)) with check (public.is_group_admin(group_id));
 
+drop policy if exists xxfp_expense_header_read_tenant on public.xxfp_group_expense_header;
 create policy xxfp_expense_header_read_tenant on public.xxfp_group_expense_header
 for select to authenticated
 using (public.is_group_member(group_id));
+drop policy if exists xxfp_expense_header_manage_admin on public.xxfp_group_expense_header;
 create policy xxfp_expense_header_manage_admin on public.xxfp_group_expense_header
 for all to authenticated
 using (public.is_group_admin(group_id)) with check (public.is_group_admin(group_id));
 
+drop policy if exists xxfp_expense_lines_read_tenant on public.xxfp_group_expense_lines;
 create policy xxfp_expense_lines_read_tenant on public.xxfp_group_expense_lines
 for select to authenticated
 using (public.is_group_member(public.expense_group_id(group_expense_id)));
+drop policy if exists xxfp_expense_lines_manage_admin on public.xxfp_group_expense_lines;
 create policy xxfp_expense_lines_manage_admin on public.xxfp_group_expense_lines
 for all to authenticated
 using (public.is_group_admin(public.expense_group_id(group_expense_id)))
 with check (public.is_group_admin(public.expense_group_id(group_expense_id)));
 
+drop policy if exists xxfp_share_distribution_read_tenant on public.xxfp_share_distribution;
 create policy xxfp_share_distribution_read_tenant on public.xxfp_share_distribution
 for select to authenticated
 using (public.is_group_member(public.member_group_id(member_id)));
+drop policy if exists xxfp_share_distribution_insert_admin on public.xxfp_share_distribution;
 create policy xxfp_share_distribution_insert_admin on public.xxfp_share_distribution
 for insert to authenticated
 with check (public.is_group_admin(public.member_group_id(member_id)));
 
+drop policy if exists xxfp_share_adjustments_read_tenant on public.xxfp_share_adjustments;
 create policy xxfp_share_adjustments_read_tenant on public.xxfp_share_adjustments
 for select to authenticated
 using (public.is_group_member(public.member_group_id(member_id)));
+drop policy if exists xxfp_share_adjustments_manage_admin on public.xxfp_share_adjustments;
 create policy xxfp_share_adjustments_manage_admin on public.xxfp_share_adjustments
 for all to authenticated
 using (public.is_group_admin(public.member_group_id(member_id)))
 with check (public.is_group_admin(public.member_group_id(member_id)));
 
+drop policy if exists xxfp_audit_read_tenant on public.xxfp_audit_log;
 create policy xxfp_audit_read_tenant on public.xxfp_audit_log
 for select to authenticated
 using (
@@ -2261,6 +2311,7 @@ using (
   or public.is_group_member(public.transaction_group_id(trx_id))
   or trx_id is null
 );
+drop policy if exists xxfp_audit_insert_tenant on public.xxfp_audit_log;
 create policy xxfp_audit_insert_tenant on public.xxfp_audit_log
 for insert to authenticated
 with check (
@@ -2269,18 +2320,23 @@ with check (
   or trx_id is null
 );
 
+drop policy if exists xxfp_subscription_plans_public_read on public.xxfp_subscription_plans;
 create policy xxfp_subscription_plans_public_read on public.xxfp_subscription_plans
 for select to anon, authenticated using (true);
+drop policy if exists xxfp_subscription_plans_owner_manage on public.xxfp_subscription_plans;
 create policy xxfp_subscription_plans_owner_manage on public.xxfp_subscription_plans
 for all to authenticated using (public.is_product_owner()) with check (public.is_product_owner());
 
+drop policy if exists xxfp_group_subscriptions_read_tenant on public.xxfp_group_subscriptions;
 create policy xxfp_group_subscriptions_read_tenant on public.xxfp_group_subscriptions
 for select to authenticated
 using (public.is_group_member(group_id));
+drop policy if exists xxfp_group_subscriptions_manage_admin on public.xxfp_group_subscriptions;
 create policy xxfp_group_subscriptions_manage_admin on public.xxfp_group_subscriptions
 for all to authenticated
 using (public.is_group_admin(group_id)) with check (public.is_group_admin(group_id));
 
+drop policy if exists xxfp_withdrawal_requests_read_tenant on public.xxfp_withdrawal_requests;
 create policy xxfp_withdrawal_requests_read_tenant on public.xxfp_withdrawal_requests
 for select to authenticated
 using (
@@ -2288,16 +2344,19 @@ using (
   or public.is_group_member(group_id)
   or member_id in (select public.current_member_ids())
 );
+drop policy if exists xxfp_withdrawal_requests_insert_self on public.xxfp_withdrawal_requests;
 create policy xxfp_withdrawal_requests_insert_self on public.xxfp_withdrawal_requests
 for insert to authenticated
 with check (
   public.is_group_member(group_id)
   and member_id in (select public.current_member_ids())
 );
+drop policy if exists xxfp_withdrawal_requests_update_admin_or_approver on public.xxfp_withdrawal_requests;
 create policy xxfp_withdrawal_requests_update_admin_or_approver on public.xxfp_withdrawal_requests
 for update to authenticated
 using (public.is_group_approver(group_id)) with check (public.is_group_approver(group_id));
 
+drop policy if exists xxfp_support_disputes_read_tenant on public.xxfp_support_disputes;
 create policy xxfp_support_disputes_read_tenant on public.xxfp_support_disputes
 for select to authenticated
 using (
@@ -2306,6 +2365,7 @@ using (
   or member_id in (select public.current_member_ids())
   or created_by = public.current_auth_user_id()
 );
+drop policy if exists xxfp_support_disputes_insert_self on public.xxfp_support_disputes;
 create policy xxfp_support_disputes_insert_self on public.xxfp_support_disputes
 for insert to authenticated
 with check (
@@ -2313,6 +2373,7 @@ with check (
   or public.is_group_member(group_id)
   or member_id in (select public.current_member_ids())
 );
+drop policy if exists xxfp_support_disputes_update_owner_or_creator on public.xxfp_support_disputes;
 create policy xxfp_support_disputes_update_owner_or_creator on public.xxfp_support_disputes
 for update to authenticated
 using (
@@ -2324,32 +2385,41 @@ with check (
   or created_by = public.current_auth_user_id()
 );
 
+drop policy if exists xxfp_legacy_group_opening_read_tenant on public.xxfp_legacy_group_opening;
 create policy xxfp_legacy_group_opening_read_tenant on public.xxfp_legacy_group_opening
 for select to authenticated
 using (public.is_group_member(group_id));
+drop policy if exists xxfp_legacy_group_opening_manage_admin on public.xxfp_legacy_group_opening;
 create policy xxfp_legacy_group_opening_manage_admin on public.xxfp_legacy_group_opening
 for all to authenticated
 using (public.is_group_admin(group_id)) with check (public.is_group_admin(group_id));
 
+drop policy if exists xxfp_pending_setup_changes_read_tenant on public.xxfp_pending_setup_changes;
 create policy xxfp_pending_setup_changes_read_tenant on public.xxfp_pending_setup_changes
 for select to authenticated
 using (public.is_product_owner() or public.is_group_member(group_id));
+drop policy if exists xxfp_pending_setup_changes_insert_admin on public.xxfp_pending_setup_changes;
 create policy xxfp_pending_setup_changes_insert_admin on public.xxfp_pending_setup_changes
 for insert to authenticated
 with check (public.is_group_admin(group_id));
+drop policy if exists xxfp_pending_setup_changes_update_admin_or_approver on public.xxfp_pending_setup_changes;
 create policy xxfp_pending_setup_changes_update_admin_or_approver on public.xxfp_pending_setup_changes
 for update to authenticated
 using (public.is_group_approver(group_id)) with check (public.is_group_approver(group_id));
 
 -- Internal machinery: only the product owner or the defining application role
+drop policy if exists xxfp_doc_sequences_manage on public.xxfp_doc_sequences;
 create policy xxfp_doc_sequences_manage on public.xxfp_doc_sequences
 for all to authenticated
 using (public.is_product_owner()) with check (public.is_product_owner());
 
+drop policy if exists xxfp_staging_all_authenticated on public.xxfp_int_import_batch;
 create policy xxfp_staging_all_authenticated on public.xxfp_int_import_batch
 for all to authenticated using (true) with check (true);
+drop policy if exists xxfp_stg_member_all_authenticated on public.xxfp_stg_member_imp;
 create policy xxfp_stg_member_all_authenticated on public.xxfp_stg_member_imp
 for all to authenticated using (true) with check (true);
+drop policy if exists xxfp_stg_trx_all_authenticated on public.xxfp_stg_trx_imp;
 create policy xxfp_stg_trx_all_authenticated on public.xxfp_stg_trx_imp
 for all to authenticated using (true) with check (true);
 
