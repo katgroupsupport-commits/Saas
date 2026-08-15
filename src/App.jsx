@@ -554,7 +554,18 @@ function App() {
       }
     };
 
-    restoreSession();
+    const bootTimeoutId = setTimeout(() => {
+      if (!isMounted) return;
+      console.warn("[app] boot timed out while connecting to Supabase");
+      updateBootingState(false);
+      updateAppError(
+        "Could not connect to the server within 30 seconds. Check your internet connection and that the Supabase project is not paused, then refresh."
+      );
+    }, 30000);
+
+    restoreSession().finally(() => {
+      if (isMounted) clearTimeout(bootTimeoutId);
+    });
 
     const { subscription } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!isMounted) return;
