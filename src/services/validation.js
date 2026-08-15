@@ -35,6 +35,11 @@ export const passwordResetSchema = z.object({
   email: z.string().email("Enter a valid email")
 });
 
+export const loginSchema = z.object({
+  identifier: z.string().trim().min(1, "Email is required").email("Enter a valid email"),
+  password: z.string().min(1, "Password is required")
+});
+
 export const memberSchema = z.object({
   fullName: z.string().trim().min(2, "Full name is required").regex(/^[A-Za-z .'-]+$/, "Full name must contain only letters, spaces, dots, apostrophes, or hyphens"),
   email: z.preprocess(

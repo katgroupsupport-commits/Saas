@@ -88,6 +88,7 @@ export function visibleMenu(role) {
     { path: "/loans", label: "Loans", permission: "loans:create", fallback: "transactions:create" },
     { path: "/corrections", label: "Corrections", permission: "adjustments:manage", fallback: "transactions:create" },
     { path: "/approvals", label: "Approvals", permission: "approvals:read", fallback: "approvals:manage" },
+    { path: "/share-distribution", label: "Share Distribution", permission: "shares:read" },
     { path: "/reports", label: "Reports & Audit", permission: "reports:read" },
     { path: "/setup", label: "Setup", permission: "setup:manage", fallback: "settings:manage" },
     { path: "/contact-support", label: "Contact", permission: "platform:read" },

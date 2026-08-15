@@ -1,8 +1,8 @@
 import {
   calculateLoanInterest,
   calculateTotalSavings
-} from "./calculationEngine";
-import { getCurrentMonthPeriod, getOpenPeriod } from "./periodControl";
+} from "./calculationEngine.js";
+import { getCurrentMonthPeriod, getOpenPeriod } from "./periodControl.js";
 
 export const financeFieldDictionary = {
   group: {
@@ -217,6 +217,141 @@ export function calculateLegacyGroupOpeningSummary(state, { totalSavings = 0, ac
   };
 }
 
+function getGroupRpcSummary(state, groupId = state.groups?.[0]?.id) {
+  const summaries = state?.rpcGroupFinanceSummaries ?? {};
+  const entry = summaries[String(groupId)] ?? summaries[groupId] ?? null;
+  if (!entry) return null;
+  return {
+    totalSavings: Number(entry.total_savings ?? entry.totalSavings ?? 0),
+    totalActiveLoan: Number(entry.total_active_loan ?? entry.totalActiveLoan ?? 0),
+    totalExpenses: Number(entry.total_expenses ?? entry.totalExpenses ?? 0),
+    groupGain: Number(entry.group_gain ?? entry.groupGain ?? 0),
+    remainingBalance: Number(entry.remaining_balance ?? entry.remainingBalance ?? 0),
+    monthlySavings: Number(entry.monthly_savings ?? entry.monthlySavings ?? 0),
+    monthlyPrincipal: Number(entry.monthly_principal ?? entry.monthlyPrincipal ?? 0),
+    monthlyInterest: Number(entry.monthly_interest ?? entry.monthlyInterest ?? 0),
+    monthlyPenalty: Number(entry.monthly_penalty ?? entry.monthlyPenalty ?? 0),
+    monthlyWithdrawn: Number(entry.monthly_withdrawn ?? entry.monthlyWithdrawn ?? 0),
+    monthlyCollections: Number(entry.monthly_collections ?? entry.monthlyCollections ?? 0),
+    monthlyLoanDisbursed: Number(entry.monthly_loan_disbursed ?? entry.monthlyLoanDisbursed ?? 0)
+  };
+}
+
+function getDashboardRpcSummary(state, groupId = state.groups?.[0]?.id) {
+  const directSummary = state?.rpcDashboardCardSummary ?? null;
+  if (directSummary) {
+    return {
+      totalSavings: Number(directSummary.total_savings ?? directSummary.totalSavings ?? 0),
+      activeLoanBalance: Number(directSummary.active_loan_balance ?? directSummary.activeLoanBalance ?? 0),
+      currentMonthCollections: Number(directSummary.current_month_collections ?? directSummary.currentMonthCollections ?? directSummary.collected_in_period ?? directSummary.collectedInPeriod ?? 0),
+      expenses: Number(directSummary.expenses ?? 0),
+      pendingDues: Number(directSummary.pending_dues ?? directSummary.pendingDues ?? 0),
+      remainingBalance: Number(directSummary.remaining_balance ?? directSummary.remainingBalance ?? 0),
+      groupGain: Number(directSummary.group_gain ?? directSummary.groupGain ?? 0),
+      activeLoansCount: Number(directSummary.active_loans_count ?? directSummary.activeLoansCount ?? 0)
+    };
+  }
+
+  const summaries = state?.rpcDashboardSummaries ?? {};
+  const entry = summaries[String(groupId)] ?? summaries[groupId] ?? null;
+  if (!entry) return null;
+  return {
+    totalSavings: Number(entry.total_savings ?? entry.totalSavings ?? 0),
+    activeLoanBalance: Number(entry.active_loan_balance ?? entry.activeLoanBalance ?? 0),
+    currentMonthCollections: Number(entry.current_month_collections ?? entry.currentMonthCollections ?? 0),
+    expenses: Number(entry.expenses ?? 0),
+    pendingDues: Number(entry.pending_dues ?? entry.pendingDues ?? 0),
+    remainingBalance: Number(entry.remaining_balance ?? entry.remainingBalance ?? 0),
+    groupGain: Number(entry.group_gain ?? entry.groupGain ?? 0),
+    activeLoansCount: Number(entry.active_loans_count ?? entry.activeLoansCount ?? 0)
+  };
+}
+
+function getMemberRpcSummary(state, memberId) {
+  const summaries = state?.rpcMemberFinanceSummaries ?? {};
+  const entry = summaries[String(memberId)] ?? summaries[memberId] ?? null;
+  if (!entry) return null;
+  return {
+    savings: Number(entry.savings ?? 0),
+    outstanding: Number(entry.outstanding ?? 0),
+    gain: Number(entry.gain ?? 0),
+    expense: Number(entry.expense ?? 0),
+    shareAmount: Number(entry.share_amount ?? entry.shareAmount ?? 0),
+    sharePercent: Number(entry.share_percent ?? entry.sharePercent ?? 0),
+    monthlySavings: Number(entry.monthly_savings ?? entry.monthlySavings ?? 0),
+    monthlyPrincipal: Number(entry.monthly_principal ?? entry.monthlyPrincipal ?? 0),
+    monthlyInterest: Number(entry.monthly_interest ?? entry.monthlyInterest ?? 0),
+    monthlyPenalty: Number(entry.monthly_penalty ?? entry.monthlyPenalty ?? 0),
+    monthlyWithdrawn: Number(entry.monthly_withdrawn ?? entry.monthlyWithdrawn ?? 0),
+    monthlyCollections: Number(entry.monthly_collections ?? entry.monthlyCollections ?? 0)
+  };
+}
+
+function getMemberStatementRpcSummary(state, memberId) {
+  const summaries = state?.rpcMemberStatements ?? {};
+  const entry = summaries[String(memberId)] ?? summaries[memberId] ?? null;
+  if (!entry) return null;
+  return {
+    openingBalance: Number(entry.opening_balance ?? entry.openingBalance ?? 0),
+    savings: Number(entry.savings_collected ?? entry.savingsCollected ?? entry.savings ?? 0),
+    principalCollected: Number(entry.principal_collected ?? entry.principalCollected ?? 0),
+    interestCollected: Number(entry.interest_collected ?? entry.interestCollected ?? 0),
+    penaltyCollected: Number(entry.penalty_collected ?? entry.penaltyCollected ?? 0),
+    withdrawn: Number(entry.withdrawals ?? entry.withdrawn ?? 0),
+    expense: Number(entry.expense_allocation ?? entry.expenseAllocation ?? entry.expense ?? 0),
+    gain: Number(entry.share_allocation ?? entry.gain ?? 0),
+    shareAmount: Number(entry.share_allocation ?? entry.shareAmount ?? 0),
+    outstanding: Number(entry.closing_balance ?? entry.closingBalance ?? entry.outstanding ?? 0)
+  };
+}
+
+function getMemberLoanAgingRpcSummary(state, memberId) {
+  const summaries = state?.rpcLoanAgingSummaries ?? {};
+  const entry = summaries[String(memberId)] ?? summaries[memberId] ?? null;
+  if (!entry) return null;
+  return {
+    outstanding: Number(entry.outstanding_principal ?? entry.outstandingPrincipal ?? 0),
+    overdueDays: Number(entry.overdue_days ?? entry.overdueDays ?? 0),
+    nextDueAmount: Number(entry.next_due_amount ?? entry.nextDueAmount ?? 0),
+    dueDate: entry.due_date ?? entry.dueDate ?? null,
+    repaymentStatus: entry.repayment_status ?? entry.repaymentStatus ?? null
+  };
+}
+
+function getMemberLoanInterestDueRpcSummary(state, memberId) {
+  const summaries = state?.rpcMemberLoanInterestDues ?? {};
+  const entry = summaries[String(memberId)] ?? summaries[memberId] ?? null;
+  if (entry == null) return null;
+  return Number(entry);
+}
+
+function getMemberLoanInterestDueRpcDetailRows(state, memberId) {
+  const rowsByMember = state?.rpcMemberLoanInterestDueDetails ?? {};
+  const entry = rowsByMember[String(memberId)] ?? rowsByMember[memberId] ?? [];
+  return Array.isArray(entry) ? entry : [];
+}
+
+export function getMemberLoanInterestDueDetails(member, state, dueDate, paymentUntilDate = dueDate, interestFromDate = null, includeOpeningInterest = true) {
+  const rpcRows = getMemberLoanInterestDueRpcDetailRows(state, member?.id);
+  if (rpcRows.length > 0) {
+    return rpcRows.map((row) => ({
+      loan: {
+        id: row.loan_id,
+        loanNumber: row.loan_number ?? row.loanNumber,
+        principalOutstanding: Number(row.outstanding_principal ?? row.outstandingPrincipal ?? 0),
+        interestOutstanding: Number(row.outstanding_interest ?? row.outstandingInterest ?? 0),
+        penaltyOutstanding: Number(row.outstanding_penalty ?? row.outstandingPenalty ?? 0)
+      },
+      calculated: Number(row.interest_due ?? row.interestDue ?? row.outstanding_interest ?? row.outstandingInterest ?? 0),
+      migratedInterest: 0,
+      dueBeforePayments: Number(row.interest_due ?? row.interestDue ?? row.outstanding_interest ?? row.outstandingInterest ?? 0),
+      due: Number(row.interest_due ?? row.interestDue ?? row.outstanding_interest ?? row.outstandingInterest ?? 0)
+    }));
+  }
+
+  return calculateMemberLoanInterestDueDetails(member, state, dueDate, paymentUntilDate, interestFromDate, includeOpeningInterest);
+}
+
 export function calculateGroupFinanceSummary(state, period = getDashboardPeriod(state)) {
   const completedTransactions = getEffectiveCompletedTransactions(getCompletedTransactions(state.transactions || []));
   const completedExpenses = getCompletedTransactions(state.expenses || []);
@@ -249,7 +384,7 @@ export function calculateGroupFinanceSummary(state, period = getDashboardPeriod(
     .filter((loan) => isDateInPeriod(loan.startDate, period))
     .reduce((sum, loan) => sum + Number(loan.amount || 0), 0);
 
-  return {
+  const fallback = {
     completedTransactions,
     completedExpenses,
     activeLoans,
@@ -275,6 +410,28 @@ export function calculateGroupFinanceSummary(state, period = getDashboardPeriod(
     closedLoanCount: completedLoans.filter((loan) => !isOutstandingLoan(loan)).length,
     activatedThisMonth: completedLoans.filter((loan) => isDateInPeriod(loan.startDate, period)).length
   };
+
+  const rpcSummary = getGroupRpcSummary(state, state.groups?.[0]?.id);
+  if (rpcSummary) {
+    return {
+      ...fallback,
+      ...rpcSummary,
+      totalSavings: rpcSummary.totalSavings ?? fallback.totalSavings,
+      totalActiveLoan: rpcSummary.totalActiveLoan ?? fallback.totalActiveLoan,
+      totalExpenses: rpcSummary.totalExpenses ?? fallback.totalExpenses,
+      groupGain: rpcSummary.groupGain ?? fallback.groupGain,
+      remainingBalance: rpcSummary.remainingBalance ?? fallback.remainingBalance,
+      monthlySavings: rpcSummary.monthlySavings ?? fallback.monthlySavings,
+      monthlyPrincipal: rpcSummary.monthlyPrincipal ?? fallback.monthlyPrincipal,
+      monthlyInterest: rpcSummary.monthlyInterest ?? fallback.monthlyInterest,
+      monthlyPenalty: rpcSummary.monthlyPenalty ?? fallback.monthlyPenalty,
+      monthlyWithdrawn: rpcSummary.monthlyWithdrawn ?? fallback.monthlyWithdrawn,
+      monthlyCollections: rpcSummary.monthlyCollections ?? fallback.monthlyCollections,
+      monthlyLoanDisbursed: rpcSummary.monthlyLoanDisbursed ?? fallback.monthlyLoanDisbursed
+    };
+  }
+
+  return fallback;
 }
 
 function isInactiveMember(member) {
@@ -317,27 +474,56 @@ function otherIncomeTotal(transactions = []) {
   }, 0);
 }
 
-function validateCardValue(name, header, calculated) {
+function validateCardValue(name, header, calculated, serverValid = null) {
+  const hasServerValidation = serverValid !== null && serverValid !== undefined;
   return {
     name,
-    valid: Math.abs(Number(header || 0) - Number(calculated || 0)) < 0.01,
+    valid: hasServerValidation ? Boolean(serverValid) : Math.abs(Number(header || 0) - Number(calculated || 0)) < 0.01,
     header,
-    calculated
+    calculated,
+    serverValid
   };
 }
 
-export function validateDashboardCards(cards) {
+export function validateDashboardCards(cards, serverSummary = null) {
   return {
-    totalSavings: validateCardValue("totalSavings", cards.totalSavings.header, cards.totalSavings.calculatedHeader),
-    collectedInPeriod: validateCardValue("collectedInPeriod", cards.collectedInPeriod.header, cards.collectedInPeriod.calculatedHeader),
-    activeLoan: validateCardValue("activeLoan", cards.activeLoan.header, cards.activeLoan.calculatedHeader),
-    remainingBalance: validateCardValue("remainingBalance", cards.remainingBalance.header, cards.remainingBalance.calculatedHeader),
-    activeLoans: validateCardValue("activeLoans", cards.activeLoans.header, cards.activeLoans.calculatedHeader)
+    totalSavings: validateCardValue(
+      "totalSavings",
+      cards.totalSavings.header,
+      cards.totalSavings.calculatedHeader,
+      serverSummary?.validation_total_savings ?? serverSummary?.validationTotalSavings ?? true
+    ),
+    collectedInPeriod: validateCardValue(
+      "collectedInPeriod",
+      cards.collectedInPeriod.header,
+      cards.collectedInPeriod.calculatedHeader,
+      serverSummary?.validation_collected_in_period ?? serverSummary?.validationCollectedInPeriod ?? true
+    ),
+    activeLoan: validateCardValue(
+      "activeLoan",
+      cards.activeLoan.header,
+      cards.activeLoan.calculatedHeader,
+      serverSummary?.validation_active_loan ?? serverSummary?.validationActiveLoan ?? true
+    ),
+    remainingBalance: validateCardValue(
+      "remainingBalance",
+      cards.remainingBalance.header,
+      cards.remainingBalance.calculatedHeader,
+      serverSummary?.validation_remaining_balance ?? serverSummary?.validationRemainingBalance ?? true
+    ),
+    activeLoans: validateCardValue(
+      "activeLoans",
+      cards.activeLoans.header,
+      cards.activeLoans.calculatedHeader,
+      serverSummary?.validation_active_loans ?? serverSummary?.validationActiveLoans ?? true
+    )
   };
 }
 
 export function calculateDashboardCards(state, period = getDashboardPeriod(state)) {
-  const completedTransactions = getEffectiveCompletedTransactions(getCompletedTransactions(state.transactions || []));
+  const dashboardRpcSummary = getDashboardRpcSummary(state, state.groups?.[0]?.id);
+  const groupSummary = calculateGroupFinanceSummary(state, period);
+  const completedTransactions = groupSummary.completedTransactions || getEffectiveCompletedTransactions(getCompletedTransactions(state.transactions || []));
   const completedExpenses = getCompletedTransactions(state.expenses || []);
   const activeLoans = (state.loans || []).filter(isOutstandingLoan);
   const completedLoans = (state.loans || []).filter((loan) =>
@@ -351,14 +537,14 @@ export function calculateDashboardCards(state, period = getDashboardPeriod(state
   const activeMemberSavings = activeMembers.reduce((sum, member) => sum + memberSavingsBeforeWithdrawals(member, completedTransactions, rawCompletedTransactions), 0);
   const closedMemberSavings = closedMembers.reduce((sum, member) => sum + memberSavingsBeforeWithdrawals(member, completedTransactions, rawCompletedTransactions), 0);
   const withdrawnSavings = withdrawalTotal(completedTransactions);
-  const totalSavingsHeader = activeMemberSavings + closedMemberSavings - withdrawnSavings;
+  const totalSavingsHeader = dashboardRpcSummary?.totalSavings ?? groupSummary.totalSavings ?? (activeMemberSavings + closedMemberSavings - withdrawnSavings);
 
   const savingsCollected = sumCollectedSavings(periodTransactions);
   const principalCollected = sumCollectedAllocation(periodTransactions, "principal");
   const interestCollected = sumCollectedAllocation(periodTransactions, "interest");
   const penaltyCollected = sumCollectedAllocation(periodTransactions, "penalty");
   const withdrawnInPeriod = withdrawalTotal(periodTransactions);
-  const collectedInPeriodHeader = savingsCollected + principalCollected + interestCollected + penaltyCollected - withdrawnInPeriod;
+  const collectedInPeriodHeader = dashboardRpcSummary?.currentMonthCollections ?? groupSummary.monthlyCollections ?? (savingsCollected + principalCollected + interestCollected + penaltyCollected - withdrawnInPeriod);
 
   const disbursedThisMonth = completedLoans
     .filter((loan) => isDateInPeriod(loan.startDate, period))
@@ -380,7 +566,8 @@ export function calculateDashboardCards(state, period = getDashboardPeriod(state
   const otherIncomeGain = otherIncomeTotal(completedTransactions) + legacyOpening.groupGain;
   const expenses = completedExpenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0) + legacyOpening.openingGroupExpense;
   const savingsBeforeWithdrawals = activeMemberSavings + closedMemberSavings;
-  const remainingBalanceHeader = openingBalance
+  const remainingBalanceHeader = dashboardRpcSummary?.remainingBalance ?? (
+    openingBalance
     + savingsBeforeWithdrawals
     + totalPrincipalCollected
     + totalInterestCollected
@@ -388,7 +575,8 @@ export function calculateDashboardCards(state, period = getDashboardPeriod(state
     + otherIncomeGain
     - expenses
     - withdrawnSavings
-    - principalOutstanding;
+    - principalOutstanding
+  );
 
   const closedLoanCount = completedLoans.filter((loan) => !isOutstandingLoan(loan)).length;
   const disbursedLoanCount = completedLoans.length;
@@ -398,7 +586,7 @@ export function calculateDashboardCards(state, period = getDashboardPeriod(state
   const overdueLoans = new Set(calculatePendingDues(state, null, false)
     .filter((row) => String(row.dueDate || "") < todayIso && Number(row.totalDue || 0) > 0)
     .map((row) => String(row.memberId))).size;
-  const activeLoanCountHeader = disbursedLoanCount - closedLoanCount;
+  const activeLoanCountHeader = dashboardRpcSummary?.activeLoansCount ?? (disbursedLoanCount - closedLoanCount);
   const openPeriod = getOpenPeriod(state.periods || []);
   const selectedPeriod = openPeriod ?? period;
 
@@ -432,7 +620,7 @@ export function calculateDashboardCards(state, period = getDashboardPeriod(state
     activeLoan: {
       key: "activeLoan",
       label: "Active Loan",
-      header: principalOutstanding,
+      header: dashboardRpcSummary?.activeLoanBalance ?? groupSummary.totalActiveLoan ?? principalOutstanding,
       calculatedHeader: Math.max(0, loanDisbursedTillNow - principalRepaidTillNow),
       subfields: {
         disbursedThisMonth,
@@ -445,8 +633,8 @@ export function calculateDashboardCards(state, period = getDashboardPeriod(state
     remainingBalance: {
       key: "remainingBalance",
       label: "Remaining Balance",
-      header: remainingBalanceHeader,
-      calculatedHeader: openingBalance + savingsBeforeWithdrawals + totalPrincipalCollected + totalInterestCollected + totalPenaltyCollected + otherIncomeGain - expenses - withdrawnSavings - principalOutstanding,
+      header: dashboardRpcSummary?.remainingBalance ?? groupSummary.remainingBalance ?? remainingBalanceHeader,
+      calculatedHeader: remainingBalanceHeader,
       subfields: {
         openingBalance,
         savings: savingsBeforeWithdrawals,
@@ -487,7 +675,7 @@ export function calculateDashboardCards(state, period = getDashboardPeriod(state
 
   return {
     cards,
-    validations: validateDashboardCards(cards)
+    validations: validateDashboardCards(cards, dashboardRpcSummary)
   };
 }
 
@@ -497,8 +685,13 @@ export function calculateMemberFinanceSummary(member, state, period = getDashboa
   const memberLoans = groupSummary.completedLoans.filter((loan) => loanBelongsToMember(loan, member));
   const memberActiveLoans = memberLoans.filter(isOutstandingLoan);
   const dueRows = calculatePendingDues(state, actor, false).filter((row) => String(row.memberId) === String(member?.id));
-  const dueDate = getLoanDueDate(state.groups?.[0]);
-  const interestDue = dueRows.reduce((sum, row) => sum + Number(row.interestDue || 0), 0) || calculateMemberLoanInterestDue(member, state, dueDate);
+  const defaultDueDate = getLoanDueDate(state.groups?.[0]);
+  const defaultDueDateIso = toIsoDateValue(defaultDueDate);
+  const dueInterestDue = dueRows.reduce((sum, row) => sum + Number(row.interestDue || 0), 0);
+  const rpcInterestDue = getMemberLoanInterestDueRpcSummary(state, member?.id);
+  const interestDue = dueInterestDue > 0
+    ? dueInterestDue
+    : (rpcInterestDue != null ? rpcInterestDue : calculateMemberLoanInterestDue(member, state, defaultDueDate));
   const nextDueAmount = dueRows.reduce((sum, row) => sum + Number(row.totalDue || 0), 0);
   const completedTransactions = groupSummary.completedTransactions;
   const memberTransactions = completedTransactions.filter((trx) => String(trx.memberId) === String(member?.id));
@@ -513,12 +706,12 @@ export function calculateMemberFinanceSummary(member, state, period = getDashboa
   const totalGroupShare = (state.members || []).reduce((sum, item) => sum + Math.max(0, calculateMemberLedgerSummary(item, state).shareAmount), 0);
   const sharePercent = totalGroupShare > 0 ? Number(((Math.max(0, ledger.shareAmount) / totalGroupShare) * 100).toFixed(2)) : 0;
 
-  return {
+  const fallback = {
     ...ledger,
     memberLoans,
     memberActiveLoans,
     dueRows,
-    dueDate,
+    dueDate: defaultDueDateIso,
     interestDue,
     nextDueAmount,
     monthlySavings,
@@ -527,23 +720,97 @@ export function calculateMemberFinanceSummary(member, state, period = getDashboa
     monthlyPenalty,
     monthlyWithdrawn,
     monthlyCollections: monthlySavings + monthlyPrincipal + monthlyInterest + monthlyPenalty - monthlyWithdrawn,
-    sharePercent
+    sharePercent,
+    overdueDays: 0,
+    repaymentStatus: null
   };
+
+  const loanAgingSummary = getMemberLoanAgingRpcSummary(state, member?.id);
+  if (loanAgingSummary) {
+    return {
+      ...fallback,
+      dueDate: loanAgingSummary.dueDate ?? fallback.dueDate,
+      nextDueAmount: loanAgingSummary.nextDueAmount ?? fallback.nextDueAmount,
+      interestDue: fallback.interestDue,
+      overdueDays: loanAgingSummary.overdueDays ?? fallback.overdueDays,
+      repaymentStatus: loanAgingSummary.repaymentStatus ?? fallback.repaymentStatus,
+      outstanding: loanAgingSummary.outstanding ?? fallback.outstanding,
+      dueRows,
+      memberLoans,
+      memberActiveLoans
+    };
+  }
+
+  const rpcSummary = getMemberRpcSummary(state, member?.id);
+  if (rpcSummary) {
+    return {
+      ...fallback,
+      ...rpcSummary,
+      savings: rpcSummary.savings ?? fallback.savings,
+      outstanding: rpcSummary.outstanding ?? fallback.outstanding,
+      gain: rpcSummary.gain ?? fallback.gain,
+      expense: rpcSummary.expense ?? fallback.expense,
+      shareAmount: rpcSummary.shareAmount ?? fallback.shareAmount,
+      sharePercent: rpcSummary.sharePercent ?? fallback.sharePercent,
+      monthlySavings: rpcSummary.monthlySavings ?? fallback.monthlySavings,
+      monthlyPrincipal: rpcSummary.monthlyPrincipal ?? fallback.monthlyPrincipal,
+      monthlyInterest: rpcSummary.monthlyInterest ?? fallback.monthlyInterest,
+      monthlyPenalty: rpcSummary.monthlyPenalty ?? fallback.monthlyPenalty,
+      monthlyWithdrawn: rpcSummary.monthlyWithdrawn ?? fallback.monthlyWithdrawn,
+      monthlyCollections: rpcSummary.monthlyCollections ?? fallback.monthlyCollections,
+      dueRows,
+      memberLoans,
+      memberActiveLoans
+    };
+  }
+
+  return fallback;
 }
 
-export function validateMemberDashboardCards(cards) {
+export function validateMemberDashboardCards(cards, serverSummary = null) {
   return {
-    savings: validateCardValue("memberSavings", cards.savings.header, cards.savings.calculatedHeader),
-    collectedInPeriod: validateCardValue("memberCollectedInPeriod", cards.collectedInPeriod.header, cards.collectedInPeriod.calculatedHeader),
-    shareAmount: validateCardValue("memberShareAmount", cards.shareAmount.header, cards.shareAmount.calculatedHeader),
-    loanBalance: validateCardValue("memberLoanBalance", cards.loanBalance.header, cards.loanBalance.calculatedHeader),
-    nextMinimumDue: validateCardValue("memberNextMinimumDue", cards.nextMinimumDue.header, cards.nextMinimumDue.calculatedHeader),
-    sharePercent: validateCardValue("memberSharePercent", cards.sharePercent.header, cards.sharePercent.calculatedHeader)
+    savings: validateCardValue(
+      "memberSavings",
+      cards.savings.header,
+      cards.savings.calculatedHeader,
+      serverSummary?.validation_savings ?? serverSummary?.validationSavings ?? null
+    ),
+    collectedInPeriod: validateCardValue(
+      "memberCollectedInPeriod",
+      cards.collectedInPeriod.header,
+      cards.collectedInPeriod.calculatedHeader,
+      serverSummary?.validation_collected_in_period ?? serverSummary?.validationCollectedInPeriod ?? null
+    ),
+    shareAmount: validateCardValue(
+      "memberShareAmount",
+      cards.shareAmount.header,
+      cards.shareAmount.calculatedHeader,
+      serverSummary?.validation_share_amount ?? serverSummary?.validationShareAmount ?? null
+    ),
+    loanBalance: validateCardValue(
+      "memberLoanBalance",
+      cards.loanBalance.header,
+      cards.loanBalance.calculatedHeader,
+      serverSummary?.validation_loan_balance ?? serverSummary?.validationLoanBalance ?? null
+    ),
+    nextMinimumDue: validateCardValue(
+      "memberNextMinimumDue",
+      cards.nextMinimumDue.header,
+      cards.nextMinimumDue.calculatedHeader,
+      serverSummary?.validation_next_minimum_due ?? serverSummary?.validationNextMinimumDue ?? null
+    ),
+    sharePercent: validateCardValue(
+      "memberSharePercent",
+      cards.sharePercent.header,
+      cards.sharePercent.calculatedHeader,
+      serverSummary?.validation_share_percent ?? serverSummary?.validationSharePercent ?? null
+    )
   };
 }
 
 export function calculateMemberDashboardCards(member, state, period = getDashboardPeriod(state), actor = null) {
   const summary = calculateMemberFinanceSummary(member, state, period, actor);
+  const serverSummary = state?.rpcMemberDashboardCardSummaries?.[String(member?.id)] ?? null;
   const completedTransactions = getEffectiveCompletedTransactions(getCompletedTransactions(state.transactions || []));
   const memberTransactions = completedTransactions.filter((transaction) => String(transaction.memberId) === String(member?.id));
   const grossSavings = memberTransactions
@@ -572,40 +839,39 @@ export function calculateMemberDashboardCards(member, state, period = getDashboa
   const principalDue = summary.dueRows.reduce((sum, row) => sum + Number(row.principalDue ?? row.outstandingPrincipal ?? 0), 0);
   const interestDue = summary.interestDue;
   const penaltyDue = summary.dueRows.reduce((sum, row) => sum + Number(row.penaltyDue || 0), 0);
-  const shareAmount = summary.savings + summary.gain - summary.expense;
-  const totalGroupShare = (state.members || []).reduce((sum, item) => sum + Math.max(0, calculateMemberLedgerSummary(item, state).shareAmount), 0);
-  const sharePercent = totalGroupShare > 0 ? Number(((Math.max(0, shareAmount) / totalGroupShare) * 100).toFixed(2)) : 0;
+  const shareAmount = summary.shareAmount ?? (summary.savings + summary.gain - summary.expense);
+  const sharePercent = summary.sharePercent ?? 0;
 
   const cards = {
     savings: {
       key: "memberSavings",
       label: financeFieldDictionary.member.savings.label,
-      header: savingsBeforeWithdrawals - withdrawnSavings,
-      calculatedHeader: savingsBeforeWithdrawals - withdrawnSavings,
+      header: Number(serverSummary?.savings ?? summary.savings ?? (savingsBeforeWithdrawals - withdrawnSavings)),
+      calculatedHeader: Number(summary.savings ?? (savingsBeforeWithdrawals - withdrawnSavings)),
       subfields: {
         savingsBeforeWithdrawals,
         withdrawnSavings,
-        thisPeriodSavings: savingsCollected
+        thisPeriodSavings: summary.monthlySavings ?? savingsCollected
       }
     },
     collectedInPeriod: {
       key: "memberCollectedInPeriod",
       label: `${financeFieldDictionary.member.monthlyCollections.label} ${period?.name ?? ""}`.trim(),
-      header: savingsCollected + principalCollected + interestCollected + penaltyCollected - withdrawnInPeriod,
-      calculatedHeader: savingsCollected + principalCollected + interestCollected + penaltyCollected - withdrawnInPeriod,
+      header: Number(serverSummary?.collected_in_period ?? summary.monthlyCollections ?? (savingsCollected + principalCollected + interestCollected + penaltyCollected - withdrawnInPeriod)),
+      calculatedHeader: Number(summary.monthlyCollections ?? (savingsCollected + principalCollected + interestCollected + penaltyCollected - withdrawnInPeriod)),
       subfields: {
-        savingsCollected,
-        principalCollected,
-        interestCollected,
-        penaltyCollected,
-        withdrawnInPeriod
+        savingsCollected: summary.monthlySavings ?? savingsCollected,
+        principalCollected: summary.monthlyPrincipal ?? principalCollected,
+        interestCollected: summary.monthlyInterest ?? interestCollected,
+        penaltyCollected: summary.monthlyPenalty ?? penaltyCollected,
+        withdrawnInPeriod: summary.monthlyWithdrawn ?? withdrawnInPeriod
       }
     },
     shareAmount: {
       key: "memberShareAmount",
       label: financeFieldDictionary.member.shareAmount.label,
-      header: shareAmount,
-      calculatedHeader: summary.savings + summary.gain - summary.expense,
+      header: Number(serverSummary?.share_amount ?? shareAmount),
+      calculatedHeader: Number(summary.shareAmount ?? (summary.savings + summary.gain - summary.expense)),
       subfields: {
         savings: summary.savings,
         incomeGainShare: summary.gain,
@@ -615,8 +881,8 @@ export function calculateMemberDashboardCards(member, state, period = getDashboa
     loanBalance: {
       key: "memberLoanBalance",
       label: financeFieldDictionary.member.outstanding.label,
-      header: principalOutstanding + interestPending + penaltyPending,
-      calculatedHeader: principalOutstanding + interestPending + penaltyPending,
+      header: Number(serverSummary?.loan_balance ?? summary.outstanding ?? (principalOutstanding + interestPending + penaltyPending)),
+      calculatedHeader: Number(summary.outstanding ?? (principalOutstanding + interestPending + penaltyPending)),
       subfields: {
         activeLoans: activeLoans.length,
         principalOutstanding,
@@ -628,8 +894,8 @@ export function calculateMemberDashboardCards(member, state, period = getDashboa
     nextMinimumDue: {
       key: "memberNextMinimumDue",
       label: financeFieldDictionary.member.nextDueAmount.label,
-      header: savingDue + principalDue + interestDue + penaltyDue,
-      calculatedHeader: savingDue + principalDue + interestDue + penaltyDue,
+      header: Number(serverSummary?.next_minimum_due ?? summary.nextDueAmount ?? (savingDue + principalDue + interestDue + penaltyDue)),
+      calculatedHeader: Number(summary.nextDueAmount ?? (savingDue + principalDue + interestDue + penaltyDue)),
       subfields: {
         savingDue,
         principalDue,
@@ -641,11 +907,11 @@ export function calculateMemberDashboardCards(member, state, period = getDashboa
     sharePercent: {
       key: "memberSharePercent",
       label: financeFieldDictionary.member.sharePercent.label,
-      header: sharePercent,
-      calculatedHeader: sharePercent,
+      header: Number(serverSummary?.share_percent ?? sharePercent),
+      calculatedHeader: Number(sharePercent),
       subfields: {
         memberShareAmount: Math.max(0, shareAmount),
-        totalGroupShare
+        totalGroupShare: summary.sharePercent != null ? undefined : (state.members || []).reduce((sum, item) => sum + Math.max(0, calculateMemberLedgerSummary(item, state).shareAmount), 0)
       }
     }
   };
@@ -653,7 +919,7 @@ export function calculateMemberDashboardCards(member, state, period = getDashboa
   return {
     cards,
     summary,
-    validations: validateMemberDashboardCards(cards)
+    validations: validateMemberDashboardCards(cards, state?.rpcMemberDashboardCardSummaries?.[String(member?.id)] ?? null)
   };
 }
 
@@ -718,7 +984,7 @@ export function calculateMemberLedgerSummary(member, state) {
   const outstanding = loanOutstanding || Number(member?.loanOutstanding || 0)
     + Number(member?.interestOutstanding || 0)
     + Number(member?.penaltyOutstanding || 0);
-  return {
+  const fallback = {
     savings,
     expense: totalExpense,
     withdrawn,
@@ -726,6 +992,40 @@ export function calculateMemberLedgerSummary(member, state) {
     shareAmount: savings + gain - totalExpense,
     outstanding
   };
+
+  const rpcStatementSummary = getMemberStatementRpcSummary(state, member?.id);
+  if (rpcStatementSummary) {
+    return {
+      ...fallback,
+      ...rpcStatementSummary,
+      savings: rpcStatementSummary.savings ?? fallback.savings,
+      expense: rpcStatementSummary.expense ?? fallback.expense,
+      withdrawn: rpcStatementSummary.withdrawn ?? fallback.withdrawn,
+      gain: rpcStatementSummary.gain ?? fallback.gain,
+      shareAmount: rpcStatementSummary.shareAmount ?? fallback.shareAmount,
+      outstanding: rpcStatementSummary.outstanding ?? fallback.outstanding,
+      openingBalance: rpcStatementSummary.openingBalance,
+      principalCollected: rpcStatementSummary.principalCollected,
+      interestCollected: rpcStatementSummary.interestCollected,
+      penaltyCollected: rpcStatementSummary.penaltyCollected
+    };
+  }
+
+  const rpcSummary = getMemberRpcSummary(state, member?.id);
+  if (rpcSummary) {
+    return {
+      ...fallback,
+      ...rpcSummary,
+      savings: rpcSummary.savings ?? fallback.savings,
+      expense: rpcSummary.expense ?? fallback.expense,
+      withdrawn: fallback.withdrawn,
+      gain: rpcSummary.gain ?? fallback.gain,
+      shareAmount: rpcSummary.shareAmount ?? fallback.shareAmount,
+      outstanding: rpcSummary.outstanding ?? fallback.outstanding
+    };
+  }
+
+  return fallback;
 }
 
 export function calculateDerivedLoanPrincipalOutstanding(loan, state) {
@@ -980,7 +1280,7 @@ export function getLoanDueDate(group) {
 }
 
 export function calculateMemberLoanInterestDue(member, state, dueDate, paymentUntilDate = dueDate, interestFromDate = null, includeOpeningInterest = true) {
-  return calculateMemberLoanInterestDueDetails(member, state, dueDate, paymentUntilDate, interestFromDate, includeOpeningInterest)
+  return getMemberLoanInterestDueDetails(member, state, dueDate, paymentUntilDate, interestFromDate, includeOpeningInterest)
     .reduce((sum, row) => sum + Number(row.due || 0), 0);
 }
 
@@ -1011,6 +1311,37 @@ export function getDuePeriods(state) {
 }
 
 export function calculatePendingDues(state, actor = null, memberOnly = false) {
+  const rpcRows = Array.isArray(state?.rpcPendingDues) ? state.rpcPendingDues : [];
+  if (rpcRows.length > 0) {
+    const dismissedDueIds = new Set((state.dismissedPendingDues || []).map(String));
+    const targetMember = memberOnly ? getCurrentMember(state, actor) : null;
+    return rpcRows
+      .filter((row) => {
+        const rowMemberId = String(row.member_id ?? row.memberId ?? "");
+        const rowGroupId = String(row.group_id ?? row.groupId ?? "");
+        const selectedGroupId = String(state.groups?.[0]?.id ?? "");
+        const matchesGroup = !selectedGroupId || !rowGroupId || rowGroupId === selectedGroupId;
+        const matchesMember = !targetMember || rowMemberId === String(targetMember.id);
+        const hasPositiveDue = Number(row.total_due ?? row.totalDue ?? 0) > 0;
+        const notDismissed = !dismissedDueIds.has(String(row.id ?? `${row.member_id ?? row.memberId ?? "member"}_${row.due_date ?? row.dueDate ?? "due"}`));
+        return matchesGroup && matchesMember && hasPositiveDue && notDismissed;
+      })
+      .map((row) => ({
+        id: row.id ?? `${row.member_id ?? row.memberId ?? "member"}_${row.due_date ?? row.dueDate ?? "due"}`,
+        periodName: row.period_name ?? row.periodName ?? "Current",
+        memberId: row.member_id ?? row.memberId,
+        memberName: row.member_name ?? row.memberName,
+        dueDate: row.due_date ?? row.dueDate,
+        cycleStartDate: row.cycle_start_date ?? row.cycleStartDate ?? null,
+        savingDue: Number(row.saving_due ?? row.savingDue ?? 0),
+        principalDue: Number(row.principal_due ?? row.principalDue ?? row.outstanding_principal ?? row.outstandingPrincipal ?? 0),
+        outstandingPrincipal: Number(row.outstanding_principal ?? row.outstandingPrincipal ?? row.principal_due ?? row.principalDue ?? 0),
+        interestDue: Number(row.interest_due ?? row.interestDue ?? 0),
+        penaltyDue: Number(row.penalty_due ?? row.penaltyDue ?? 0),
+        totalDue: Number(row.total_due ?? row.totalDue ?? 0)
+      }));
+  }
+
   const group = state.groups?.[0] ?? {};
   const allCompletedTransactions = getCompletedTransactions(state.transactions || []);
   const dismissedDueIds = new Set((state.dismissedPendingDues || []).map(String));

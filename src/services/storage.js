@@ -1,4 +1,4 @@
-import { roles } from "./permissions";
+import { roles } from "./permissions.js";
 
 const key = "bachat-gat-saas-state-v3";
 const legacyKeys = [
@@ -39,6 +39,18 @@ export const initialState = {
   shareDistributions: [],
   shareAdjustments: [],
   disputes: [],
+  rpcGroupFinanceSummaries: {},
+  rpcMemberFinanceSummaries: {},
+  rpcMemberStatements: {},
+  rpcLoanAgingSummaries: {},
+  rpcMemberLoanInterestDues: {},
+  rpcMemberDashboardCardSummaries: {},
+  rpcDashboardSummaries: {},
+  rpcPendingDues: [],
+  rpcShareDistribution: [],
+  rpcShareDistributionRange: [],
+  rpcShareDistributionSnapshots: {},
+  rpcMemberLoanInterestDueDetails: {},
   selectedGroupId: null
 };
 
@@ -68,6 +80,15 @@ export function saveState(state) {
     }));
   } catch {
     // Persistence is helpful for the demo, but the app should still render if storage is unavailable.
+  }
+}
+
+export function clearPersistedState() {
+  try {
+    localStorage.removeItem(key);
+    legacyKeys.forEach((legacyKey) => localStorage.removeItem(legacyKey));
+  } catch {
+    // Ignore storage errors during logout cleanup.
   }
 }
 
