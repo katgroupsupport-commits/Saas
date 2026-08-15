@@ -49,7 +49,7 @@ Deno.serve(async (req) => {
 
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
     const { data: plan, error: planError } = await adminClient
-      .from("subscription_plans")
+      .from("xxfp_subscription_plans")
       .select("*")
       .eq("plan_name", body.planName)
       .eq("duration", body.duration)

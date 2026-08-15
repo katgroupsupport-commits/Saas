@@ -1,19 +1,18 @@
 -- =============================================================================
--- Bachat Gat SaaS - XXFP_ data migration + compatibility views
+-- Bachat Gat SaaS - XXFP_ data migration
 -- Date: 2026-08-16
 --
 -- 1. Copies every row from the v2 tables into the new XXFP_ tables while
 --    preserving primary keys (OVERRIDING SYSTEM VALUE).
 -- 2. Deduplicates members into XXFP_PERSONS by email -> username -> mobile.
--- 3. Drops the old physical tables (keeps an implicit backstop: nothing here
---    is deleted destructively -- run after taking a dump).
--- 4. Recreates the old table names as read-only compatibility views so every
---    existing read-RPC and view keeps working unchanged.
--- 5. Recreates the dashboard-balance views (old names + new xxfp_v_* names).
+-- 3. Drops the old physical tables (nothing here is deleted destructively --
+--    run after taking a dump). Old names are NOT recreated: the consolidated
+--    RPCs and the application read the XXFP_ tables directly.
+-- 4. Recreates the canonical dashboard-balance views (xxfp_v_* names) and the
+--    completed-history views over the XXFP_ tables.
 --
 -- Safe on a fresh database: data copies are guarded by to_regclass() and are
--- skipped when the old tables do not exist, while the compat views are always
--- (re)created over the XXFP_ tables.
+-- skipped when the old tables do not exist.
 -- =============================================================================
 
 begin;
@@ -455,7 +454,8 @@ select setval(pg_get_serial_sequence('public.xxfp_pending_setup_changes', 'setup
 select setval(pg_get_serial_sequence('public.xxfp_doc_sequences', 'doc_sequence_id'), coalesce((select max(doc_sequence_id) from public.xxfp_doc_sequences), 1), true);
 
 -- =============================================================================
--- D. DROP OLD PHYSICAL TABLES (compat views are recreated in section E)
+-- D. DROP OLD PHYSICAL TABLES (no compatibility views are recreated - the
+--    consolidated RPCs and the application read the XXFP_ tables directly)
 -- =============================================================================
 drop view if exists public.member_dashboard_balances cascade;
 drop view if exists public.group_dashboard_balances cascade;
@@ -491,57 +491,7 @@ drop table if exists public.legacy_group_opening cascade;
 drop table if exists public.document_sequences cascade;
 
 -- =============================================================================
--- E. COMPATIBILITY VIEWS  (old names now read-only over the XXFP_ tables)
--- =============================================================================
-create or replace view public.roles with (security_invoker = true) as select * from public.xxfp_roles;
-create or replace view public.groups with (security_invoker = true) as select * from public.xxfp_groups;
-create or replace view public.auth_users with (security_invoker = true) as select * from public.xxfp_auth_users;
-
-create or replace view public.members with (security_invoker = true) as
-  select
-    gm.member_id,
-    gm.group_id,
-    gm.person_id,
-    gm.role_id,
-    gm.member_name,
-    gm.username,
-    gm.mobile_number,
-    gm.email,
-    gm.profile_photo_data,
-    gm.join_date,
-    gm.exit_date,
-    gm.status,
-    gm.created_by,
-    gm.creation_date,
-    gm.last_updated_by,
-    gm.last_update_date
-  from public.xxfp_group_members gm;
-
-create or replace view public.member_status_history with (security_invoker = true) as select * from public.xxfp_member_status_history;
-create or replace view public.group_setup with (security_invoker = true) as select * from public.xxfp_group_setup;
-create or replace view public.member_setup with (security_invoker = true) as select * from public.xxfp_member_setup;
-create or replace view public.periods with (security_invoker = true) as select * from public.xxfp_periods;
-create or replace view public.member_transaction_header with (security_invoker = true) as select * from public.xxfp_trx_header;
-create or replace view public.member_transaction_lines with (security_invoker = true) as select * from public.xxfp_trx_lines;
-create or replace view public.loan_requests with (security_invoker = true) as select * from public.xxfp_loan_requests;
-create or replace view public.loan_distribution with (security_invoker = true) as select * from public.xxfp_loan_header;
-create or replace view public.loan_repayment_schedule with (security_invoker = true) as select * from public.xxfp_loan_schedule;
-create or replace view public.approvals with (security_invoker = true) as select * from public.xxfp_approval_header;
-create or replace view public.legacy_data with (security_invoker = true) as select * from public.xxfp_legacy_data;
-create or replace view public.group_expense_header with (security_invoker = true) as select * from public.xxfp_group_expense_header;
-create or replace view public.group_expense_lines with (security_invoker = true) as select * from public.xxfp_group_expense_lines;
-create or replace view public.share_distribution with (security_invoker = true) as select * from public.xxfp_share_distribution;
-create or replace view public.share_adjustments with (security_invoker = true) as select * from public.xxfp_share_adjustments;
-create or replace view public.trx_audit_history with (security_invoker = true) as select * from public.xxfp_audit_log;
-create or replace view public.subscription_plans with (security_invoker = true) as select * from public.xxfp_subscription_plans;
-create or replace view public.group_subscriptions with (security_invoker = true) as select * from public.xxfp_group_subscriptions;
-create or replace view public.withdrawal_requests with (security_invoker = true) as select * from public.xxfp_withdrawal_requests;
-create or replace view public.support_disputes with (security_invoker = true) as select * from public.xxfp_support_disputes;
-create or replace view public.legacy_group_opening with (security_invoker = true) as select * from public.xxfp_legacy_group_opening;
-create or replace view public.pending_setup_changes with (security_invoker = true) as select * from public.xxfp_pending_setup_changes;
-
--- =============================================================================
--- F. DASHBOARD BALANCE VIEWS  (canonical xxfp_v_* + compat names)
+-- F. DASHBOARD BALANCE VIEWS  (canonical xxfp_v_* names only)
 -- =============================================================================
 create or replace view public.xxfp_v_group_dashboard_balances with (security_invoker = true) as
 with trx as (
@@ -680,9 +630,6 @@ left join share_adj sa on sa.member_id = m.member_id
 left join loans lo on lo.member_id = m.member_id
 group by m.member_id, m.group_id, s.distribution_amount, sa.adjustment_amount, lo.outstanding_principal, lo.outstanding_interest;
 
-create or replace view public.group_dashboard_balances with (security_invoker = true) as select * from public.xxfp_v_group_dashboard_balances;
-create or replace view public.member_dashboard_balances with (security_invoker = true) as select * from public.xxfp_v_member_dashboard_balances;
-
 -- Completed-history views used by reconciliation/reports
 create or replace view public.v_completed_member_transaction_history with (security_invoker = true) as
 select
@@ -739,52 +686,18 @@ from public.xxfp_legacy_data ld
 where coalesce(ld.approval_status, 'COMPLETED') in ('COMPLETED', 'APPROVED');
 
 -- =============================================================================
--- G. GRANTS ON COMPAT VIEWS
+-- G. GRANTS ON VIEWS
 -- =============================================================================
 grant select on
-  public.roles,
-  public.groups,
-  public.auth_users,
-  public.members,
-  public.member_status_history,
-  public.group_setup,
-  public.member_setup,
-  public.periods,
-  public.member_transaction_header,
-  public.member_transaction_lines,
-  public.loan_requests,
-  public.loan_distribution,
-  public.loan_repayment_schedule,
-  public.approvals,
-  public.legacy_data,
-  public.group_expense_header,
-  public.group_expense_lines,
-  public.share_distribution,
-  public.share_adjustments,
-  public.trx_audit_history,
-  public.subscription_plans,
-  public.group_subscriptions,
-  public.withdrawal_requests,
-  public.support_disputes,
-  public.legacy_group_opening,
-  public.pending_setup_changes,
   public.xxfp_v_group_dashboard_balances,
   public.xxfp_v_member_dashboard_balances,
-  public.group_dashboard_balances,
-  public.member_dashboard_balances,
   public.v_completed_member_transaction_history,
   public.v_completed_legacy_member_history
 to authenticated;
 
 grant select on
-  public.roles,
-  public.groups,
-  public.auth_users,
-  public.members,
-  public.member_transaction_header,
-  public.member_transaction_lines,
-  public.group_dashboard_balances,
-  public.member_dashboard_balances
+  public.xxfp_v_group_dashboard_balances,
+  public.xxfp_v_member_dashboard_balances
 to anon;
 
 commit;

@@ -1018,13 +1018,987 @@ $$;
 grant execute on function public.decide_approval(bigint, varchar, varchar) to authenticated;
 
 -- =============================================================================
+-- 6a. READ-ONLY / AUTH RPCS (consolidated from the legacy standalone RPC files
+--     into a single source of truth). They read the XXFP_ tables directly.
+--     Grants come from the blanket grant below.
+-- =============================================================================
+
+-- Shared helper: group-level access check (was 2026-07-12-v1-finance-rpc-helpers.sql)
+create or replace function public._ensure_group_member_access(p_group_id bigint)
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.xxfp_group_members m
+    where m.group_id = p_group_id
+      and m.member_id in (
+        select au.member_id
+        from public.xxfp_auth_users au
+        where au.supabase_user_id = coalesce(
+          auth.uid(),
+          case
+            when current_setting('request.jwt.claims.sub', true) ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+              then current_setting('request.jwt.claims.sub', true)::uuid
+            else null
+          end
+        )
+      )
+  );
+$$;
+
+-- Email registration guard (was 2026-05-28-v2-registration-email-guard.sql)
+create or replace function public.email_registered(check_email text)
+returns boolean
+language sql
+security definer
+set search_path = public, auth
+as $$
+  select exists (
+    select 1
+    from auth.users au
+    where lower(au.email) = lower(check_email)
+  )
+  or exists (
+    select 1
+    from public.xxfp_auth_users pu
+    where lower(pu.email) = lower(check_email)
+  );
+$$;
+
+-- Resolve a login identifier to an email (was 2026-07-25-add-rpc-functions.sql)
+create or replace function public.resolve_login_email(login_identifier text)
+returns text language plpgsql as $$
+declare
+  out_email text := null;
+begin
+  if login_identifier is null then
+    return null;
+  end if;
+
+  select au.email into out_email from public.xxfp_auth_users au
+  where lower(au.email) = lower(login_identifier)
+  limit 1;
+  if out_email is not null then return out_email; end if;
+
+  select m.email into out_email from public.xxfp_group_members m
+  where lower(m.username) = lower(login_identifier)
+  limit 1;
+  if out_email is not null then return out_email; end if;
+
+  select m.email into out_email from public.xxfp_group_members m
+  where lower(m.email) = lower(login_identifier)
+  limit 1;
+  return out_email;
+end; $$;
+
+-- Tenant bootstrap payload (was 2026-08-02-fix-tenant-payload-alias.sql)
+create or replace function public.rpc_get_tenant_payload(p_profile_id uuid)
+returns jsonb
+language plpgsql
+as $$
+declare
+    v_profile record;
+    v_is_product_owner boolean;
+    v_visible_group_ids bigint[];
+    v_visible_member_ids bigint[];
+    v_groups jsonb;
+    v_group_setup jsonb;
+    v_members jsonb;
+    v_member_setup jsonb;
+    v_periods jsonb;
+    v_balances jsonb;
+    v_loans jsonb;
+    v_approvals jsonb;
+    v_plans jsonb;
+    v_subscriptions jsonb;
+    v_headers jsonb;
+    v_lines jsonb;
+    v_legacy_rows jsonb;
+    v_share_distributions jsonb;
+    v_share_adjustments jsonb;
+    v_audits jsonb;
+    v_expense_headers jsonb;
+    v_expense_lines jsonb;
+    v_disputes jsonb;
+    v_withdrawal_requests jsonb;
+    v_legacy_group_openings jsonb;
+    v_pending_setup_changes jsonb;
+begin
+    select au.user_id, au.supabase_user_id, au.member_id, au.email, au.mobile_number, au.username
+      into v_profile
+    from public.xxfp_auth_users au
+    where au.supabase_user_id = p_profile_id
+    limit 1;
+
+    if not found then
+        return jsonb_build_object(
+            'groups', '[]'::jsonb,
+            'group_setup', '[]'::jsonb,
+            'members', '[]'::jsonb,
+            'member_setup', '[]'::jsonb,
+            'periods', '[]'::jsonb,
+            'member_dashboard_balances', '[]'::jsonb,
+            'loan_distribution', '[]'::jsonb,
+            'approvals', '[]'::jsonb,
+            'subscription_plans', '[]'::jsonb,
+            'group_subscriptions', '[]'::jsonb,
+            'member_transaction_header', '[]'::jsonb,
+            'member_transaction_lines', '[]'::jsonb,
+            'legacy_data', '[]'::jsonb,
+            'share_distribution', '[]'::jsonb,
+            'share_adjustments', '[]'::jsonb,
+            'trx_audit_history', '[]'::jsonb,
+            'group_expense_header', '[]'::jsonb,
+            'group_expense_lines', '[]'::jsonb,
+            'support_disputes', '[]'::jsonb,
+            'withdrawal_requests', '[]'::jsonb,
+            'legacy_group_opening', '[]'::jsonb,
+            'pending_setup_changes', '[]'::jsonb
+        );
+    end if;
+
+    v_is_product_owner := lower(coalesce(v_profile.email, '')) = 'katgroupsupport@gmail.com';
+
+    if v_is_product_owner then
+        select array_agg(distinct g.group_id)
+          into v_visible_group_ids
+        from public.xxfp_groups g;
+    else
+        select array_agg(distinct group_id)
+          into v_visible_group_ids
+        from (
+            select m.group_id
+            from public.xxfp_group_members m
+            where (
+                m.member_id = v_profile.member_id
+                or (nullif(trim(coalesce(m.email, '')), '') <> '' and nullif(trim(coalesce(v_profile.email, '')), '') <> '' and lower(m.email) = lower(v_profile.email))
+                or (nullif(trim(coalesce(m.mobile_number, '')), '') <> '' and nullif(trim(coalesce(v_profile.mobile_number, '')), '') <> '' and m.mobile_number = v_profile.mobile_number)
+            )
+            union
+            select g.group_id
+            from public.xxfp_groups g
+            where g.created_by = v_profile.user_id
+        ) visible_groups;
+    end if;
+
+    if v_visible_group_ids is null then
+        v_visible_group_ids := array[]::bigint[];
+    end if;
+
+    select coalesce(jsonb_agg(to_jsonb(r) order by r.group_id), '[]'::jsonb)
+      into v_groups
+    from (
+        select *
+        from public.xxfp_groups g
+        where g.group_id = any(v_visible_group_ids)
+    ) r;
+
+    select coalesce(jsonb_agg(to_jsonb(r) order by r.group_id), '[]'::jsonb)
+      into v_group_setup
+    from (
+        select *
+        from public.xxfp_group_setup gs
+        where gs.group_id = any(v_visible_group_ids)
+    ) r;
+
+    select array_agg(distinct m.member_id)
+      into v_visible_member_ids
+    from public.xxfp_group_members m
+    where m.group_id = any(v_visible_group_ids);
+
+    if v_visible_member_ids is null then
+        v_visible_member_ids := array[]::bigint[];
+    end if;
+
+    select coalesce(jsonb_agg(to_jsonb(r) order by r.member_id), '[]'::jsonb)
+      into v_members
+    from (
+        select *
+        from public.xxfp_group_members m
+        where m.group_id = any(v_visible_group_ids)
+    ) r;
+
+    select coalesce(jsonb_agg(to_jsonb(r) order by r.member_id), '[]'::jsonb)
+      into v_member_setup
+    from (
+        select *
+        from public.xxfp_member_setup ms
+        where ms.member_id = any(v_visible_member_ids)
+    ) r;
+
+    select coalesce(jsonb_agg(to_jsonb(r) order by r.period_id), '[]'::jsonb)
+      into v_periods
+    from (
+        select *
+        from public.xxfp_periods p
+        where p.group_id = any(v_visible_group_ids)
+    ) r;
+
+    select coalesce(jsonb_agg(to_jsonb(r) order by r.member_id), '[]'::jsonb)
+      into v_balances
+    from (
+        select *
+        from public.xxfp_v_member_dashboard_balances b
+        where b.member_id = any(v_visible_member_ids)
+    ) r;
+
+    select coalesce(jsonb_agg(to_jsonb(r) order by r.loan_id), '[]'::jsonb)
+      into v_loans
+    from (
+        select *
+        from public.xxfp_loan_header ld
+        where ld.group_id = any(v_visible_group_ids)
+    ) r;
+
+    select coalesce(jsonb_agg(to_jsonb(r) order by r.approval_id), '[]'::jsonb)
+      into v_approvals
+    from (
+        select *
+        from public.xxfp_approval_header a
+        where a.group_id = any(v_visible_group_ids)
+           or a.approver_member_id = any(v_visible_member_ids)
+    ) r;
+
+    select coalesce(jsonb_agg(to_jsonb(r) order by r.subscription_plan_id), '[]'::jsonb)
+      into v_plans
+    from (
+        select *
+        from public.xxfp_subscription_plans sp
+    ) r;
+
+    select coalesce(jsonb_agg(to_jsonb(r) order by r.group_subscription_id), '[]'::jsonb)
+      into v_subscriptions
+    from (
+        select gs.*, jsonb_build_object('group_name', g.group_name) as groups
+        from public.xxfp_group_subscriptions gs
+        left join public.xxfp_groups g on g.group_id = gs.group_id
+        where gs.group_id = any(v_visible_group_ids)
+    ) r;
+
+    select coalesce(jsonb_agg(to_jsonb(r) order by r.member_trx_id), '[]'::jsonb)
+      into v_headers
+    from (
+        select *
+        from public.xxfp_trx_header h
+        where h.group_id = any(v_visible_group_ids)
+    ) r;
+
+    select coalesce(jsonb_agg(to_jsonb(r) order by r.member_trx_id), '[]'::jsonb)
+      into v_lines
+    from (
+        select *
+        from public.xxfp_trx_lines l
+        where l.member_trx_id in (
+            select h.member_trx_id
+            from public.xxfp_trx_header h
+            where h.group_id = any(v_visible_group_ids)
+        )
+    ) r;
+
+    select coalesce(jsonb_agg(to_jsonb(r) order by r.legacy_id), '[]'::jsonb)
+      into v_legacy_rows
+    from (
+        select *
+        from public.xxfp_legacy_data ld
+        where ld.group_id = any(v_visible_group_ids)
+    ) r;
+
+    select coalesce(jsonb_agg(to_jsonb(r) order by r.member_id), '[]'::jsonb)
+      into v_share_distributions
+    from (
+        select *
+        from public.xxfp_share_distribution sd
+        where sd.member_id = any(v_visible_member_ids)
+    ) r;
+
+    select coalesce(jsonb_agg(to_jsonb(r) order by r.member_id), '[]'::jsonb)
+      into v_share_adjustments
+    from (
+        select *
+        from public.xxfp_share_adjustments sa
+        where sa.member_id = any(v_visible_member_ids)
+    ) r;
+
+    select coalesce(jsonb_agg(to_jsonb(r) order by r.audit_id), '[]'::jsonb)
+      into v_audits
+    from (
+        select ah.*
+        from public.xxfp_audit_log ah
+        join public.xxfp_trx_header h on ah.trx_id = h.member_trx_id
+        where h.group_id = any(v_visible_group_ids)
+    ) r;
+
+    select coalesce(jsonb_agg(to_jsonb(r) order by r.group_expense_id), '[]'::jsonb)
+      into v_expense_headers
+    from (
+        select *
+        from public.xxfp_group_expense_header geh
+        where geh.group_id = any(v_visible_group_ids)
+    ) r;
+
+    select coalesce(jsonb_agg(to_jsonb(r) order by r.group_expense_id), '[]'::jsonb)
+      into v_expense_lines
+    from (
+        select *
+        from public.xxfp_group_expense_lines gel
+        where gel.group_expense_id in (
+            select geh.group_expense_id
+            from public.xxfp_group_expense_header geh
+            where geh.group_id = any(v_visible_group_ids)
+        )
+    ) r;
+
+    select coalesce(jsonb_agg(to_jsonb(r) order by r.dispute_id), '[]'::jsonb)
+      into v_disputes
+    from (
+        select *
+        from public.xxfp_support_disputes sd
+        where sd.group_id = any(v_visible_group_ids)
+    ) r;
+
+    select coalesce(jsonb_agg(to_jsonb(r) order by r.withdrawal_request_id), '[]'::jsonb)
+      into v_withdrawal_requests
+    from (
+        select *
+        from public.xxfp_withdrawal_requests wr
+        where wr.group_id = any(v_visible_group_ids)
+    ) r;
+
+    select coalesce(jsonb_agg(to_jsonb(r) order by r.legacy_group_opening_id), '[]'::jsonb)
+      into v_legacy_group_openings
+    from (
+        select *
+        from public.xxfp_legacy_group_opening lgo
+        where lgo.group_id = any(v_visible_group_ids)
+    ) r;
+
+    select coalesce(jsonb_agg(to_jsonb(r) order by r.setup_change_id), '[]'::jsonb)
+      into v_pending_setup_changes
+    from (
+        select *
+        from public.xxfp_pending_setup_changes psc
+        where psc.group_id = any(v_visible_group_ids)
+    ) r;
+
+    return jsonb_build_object(
+        'groups', v_groups,
+        'group_setup', v_group_setup,
+        'members', v_members,
+        'member_setup', v_member_setup,
+        'periods', v_periods,
+        'member_dashboard_balances', v_balances,
+        'loan_distribution', v_loans,
+        'approvals', v_approvals,
+        'subscription_plans', v_plans,
+        'group_subscriptions', v_subscriptions,
+        'member_transaction_header', v_headers,
+        'member_transaction_lines', v_lines,
+        'legacy_data', v_legacy_rows,
+        'share_distribution', v_share_distributions,
+        'share_adjustments', v_share_adjustments,
+        'trx_audit_history', v_audits,
+        'group_expense_header', v_expense_headers,
+        'group_expense_lines', v_expense_lines,
+        'support_disputes', v_disputes,
+        'withdrawal_requests', v_withdrawal_requests,
+        'legacy_group_opening', v_legacy_group_openings,
+        'pending_setup_changes', v_pending_setup_changes
+    );
+end;
+$$;
+
+-- Pending dues (was 2026-08-03-rpc-pending-dues-aggregate.sql)
+create or replace function public.rpc_pending_dues(
+  p_group_id bigint,
+  p_member_id bigint default null,
+  p_as_of_date date default current_date
+)
+returns table (
+  member_id bigint,
+  member_name text,
+  due_date date,
+  saving_due numeric,
+  principal_due numeric,
+  interest_due numeric,
+  penalty_due numeric,
+  minimum_due numeric,
+  maximum_due numeric,
+  total_due numeric
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_as_of_date date := coalesce(p_as_of_date, current_date);
+  v_due_day integer := 1;
+  v_due_date date;
+begin
+  if not public._ensure_group_member_access(p_group_id) then
+    raise exception 'Access denied for pending dues' using errcode = '42501';
+  end if;
+
+  select coalesce(gs.loan_due_day, 1)
+    into v_due_day
+  from public.xxfp_group_setup gs
+  where gs.group_id = p_group_id
+  limit 1;
+
+  v_due_date := make_date(
+    extract(year from v_as_of_date)::integer,
+    extract(month from v_as_of_date)::integer,
+    least(28, greatest(1, coalesce(v_due_day, 1)))
+  );
+
+  if v_due_date < v_as_of_date then
+    v_due_date := (v_due_date + interval '1 month')::date;
+  end if;
+
+  return query
+  with member_candidates as (
+    select
+      m.member_id,
+      coalesce(m.member_name, m.username, m.email, m.member_id::text) as member_name
+    from public.xxfp_group_members m
+    where m.group_id = p_group_id
+      and upper(coalesce(m.status, '')) <> 'INACTIVE'
+      and (p_member_id is null or m.member_id = p_member_id)
+  ),
+  setup_values as (
+    select
+      mc.member_id,
+      mc.member_name,
+      coalesce(gs.monthly_saving_amount, 0)::numeric as group_saving_due,
+      nullif(gs.loan_tenure_months, 0)::integer as group_tenure_months,
+      coalesce(ms.custom_saving_amount, 0)::numeric as member_saving_due,
+      nullif(ms.loan_tenure_months, 0)::integer as member_tenure_months,
+      coalesce(b.outstanding_loan, 0)::numeric as outstanding_loan,
+      coalesce(b.outstanding_interest, 0)::numeric as outstanding_interest,
+      coalesce(b.pending_charges, 0)::numeric as pending_charges
+    from member_candidates mc
+    left join public.xxfp_group_setup gs on gs.group_id = p_group_id
+    left join public.xxfp_member_setup ms on ms.member_id = mc.member_id
+    left join public.xxfp_v_member_dashboard_balances b
+      on b.group_id = p_group_id and b.member_id = mc.member_id
+  )
+  select
+    sv.member_id,
+    sv.member_name,
+    v_due_date as due_date,
+    (case when sv.member_saving_due > 0 then sv.member_saving_due else sv.group_saving_due end)::numeric as saving_due,
+    (
+      case
+        when sv.outstanding_loan > 0 then
+          case
+            when coalesce(sv.member_tenure_months, sv.group_tenure_months) > 0 then
+              least(
+                sv.outstanding_loan,
+                greatest(
+                  0,
+                  sv.outstanding_loan / nullif(coalesce(sv.member_tenure_months, sv.group_tenure_months), 0)
+                )
+              )
+            else
+              sv.outstanding_loan
+          end
+        else 0
+      end
+    )::numeric as principal_due,
+    sv.outstanding_interest::numeric as interest_due,
+    sv.pending_charges::numeric as penalty_due,
+    (
+      (case when sv.member_saving_due > 0 then sv.member_saving_due else sv.group_saving_due end)::numeric
+      + sv.outstanding_interest::numeric
+      + sv.pending_charges::numeric
+      + (
+        case
+          when sv.outstanding_loan > 0 then
+            case
+              when coalesce(sv.member_tenure_months, sv.group_tenure_months) > 0 then
+                least(
+                  sv.outstanding_loan,
+                  greatest(
+                    0,
+                    sv.outstanding_loan / nullif(coalesce(sv.member_tenure_months, sv.group_tenure_months), 0)
+                  )
+                )
+              else
+                sv.outstanding_loan
+            end
+          else 0
+        end
+      )::numeric
+    )::numeric as minimum_due,
+    (
+      (case when sv.member_saving_due > 0 then sv.member_saving_due else sv.group_saving_due end)::numeric
+      + sv.outstanding_interest::numeric
+      + sv.pending_charges::numeric
+      + sv.outstanding_loan::numeric
+    )::numeric as maximum_due,
+    (
+      (case when sv.member_saving_due > 0 then sv.member_saving_due else sv.group_saving_due end)::numeric
+      + sv.outstanding_interest::numeric
+      + sv.pending_charges::numeric
+      + (
+        case
+          when sv.outstanding_loan > 0 then
+            case
+              when coalesce(sv.member_tenure_months, sv.group_tenure_months) > 0 then
+                least(
+                  sv.outstanding_loan,
+                  greatest(
+                    0,
+                    sv.outstanding_loan / nullif(coalesce(sv.member_tenure_months, sv.group_tenure_months), 0)
+                  )
+                )
+              else
+                sv.outstanding_loan
+            end
+          else 0
+        end
+      )::numeric
+    )::numeric as total_due
+  from setup_values sv
+  where (
+    coalesce(sv.outstanding_loan, 0) > 0
+    or coalesce(sv.outstanding_interest, 0) > 0
+    or coalesce(sv.pending_charges, 0) > 0
+    or coalesce((case when sv.member_saving_due > 0 then sv.member_saving_due else sv.group_saving_due end), 0) > 0
+  )
+  order by sv.member_name, sv.member_id;
+end;
+$$;
+
+-- Approval summary (was 2026-08-02-rpc-approval-summary.sql)
+create or replace function public.rpc_get_approval_summary(
+  p_group_id integer,
+  p_approver_member_id integer default null,
+  p_status text default null,
+  p_reference_type text default null
+)
+returns jsonb
+language plpgsql
+as $$
+declare
+  v_counts jsonb;
+  v_pending_rows jsonb;
+  v_batch_rows jsonb;
+begin
+  select jsonb_build_object(
+    'pending_count', count(*) filter (where upper(coalesce(approval_status, 'PENDING')) = 'PENDING'),
+    'approved_count', count(*) filter (where upper(coalesce(approval_status, 'PENDING')) = 'APPROVED'),
+    'rejected_count', count(*) filter (where upper(coalesce(approval_status, 'PENDING')) = 'REJECTED'),
+    'returned_count', count(*) filter (where upper(coalesce(approval_status, 'PENDING')) = 'RETURNED')
+  )
+    into v_counts
+  from public.xxfp_approval_header a
+  where a.group_id = p_group_id
+    and (p_approver_member_id is null or a.approver_member_id = p_approver_member_id)
+    and (p_status is null or upper(coalesce(a.approval_status, 'PENDING')) = upper(p_status))
+    and (p_reference_type is null or upper(coalesce(a.reference_type, '')) = upper(p_reference_type));
+
+  select coalesce(jsonb_agg(to_jsonb(row) order by row->>'created_at' desc), '[]'::jsonb)
+    into v_pending_rows
+  from (
+    select
+      a.approval_id as id,
+      a.group_id,
+      a.approval_batch_id as batch_id,
+      a.reference_id,
+      a.reference_type,
+      a.transaction_type as action,
+      coalesce(a.requester_name, a.created_by) as requester,
+      a.approver_member_id,
+      a.approver_name,
+      (case
+        when upper(coalesce(a.approval_status, 'PENDING')) = 'APPROVED' then 'Approved'
+        when upper(coalesce(a.approval_status, 'PENDING')) = 'REJECTED' then 'Rejected'
+        when upper(coalesce(a.approval_status, 'PENDING')) = 'RETURNED' then 'Returned'
+        else 'Pending'
+      end) as status,
+      a.amount,
+      a.remarks,
+      a.remarks as details,
+      a.creation_date as created_at,
+      coalesce(
+        (
+          select string_agg(distinct coalesce(x.approver_name, 'Approver'), ', ' order by coalesce(x.approver_name, 'Approver'))
+          from public.xxfp_approval_header x
+          where x.approval_batch_id = a.approval_batch_id
+            and upper(coalesce(x.approval_status, 'PENDING')) = 'PENDING'
+        ),
+        'No pending approver'
+      ) as pending_with
+    from public.xxfp_approval_header a
+    where a.group_id = p_group_id
+      and (p_approver_member_id is null or a.approver_member_id = p_approver_member_id)
+      and (p_status is null or upper(coalesce(a.approval_status, 'PENDING')) = upper(p_status))
+      and (p_reference_type is null or upper(coalesce(a.reference_type, '')) = upper(p_reference_type))
+  ) row;
+
+  select coalesce(jsonb_agg(to_jsonb(row) order by row->>'batch_id'), '[]'::jsonb)
+    into v_batch_rows
+  from (
+    select
+      a.approval_batch_id as batch_id,
+      count(*) as approval_count,
+      count(*) filter (where upper(coalesce(a.approval_status, 'PENDING')) = 'PENDING') as pending_count,
+      count(*) filter (where upper(coalesce(a.approval_status, 'PENDING')) = 'APPROVED') as approved_count,
+      count(*) filter (where upper(coalesce(a.approval_status, 'PENDING')) = 'REJECTED') as rejected_count,
+      count(*) filter (where upper(coalesce(a.approval_status, 'PENDING')) = 'RETURNED') as returned_count
+    from public.xxfp_approval_header a
+    where a.group_id = p_group_id
+      and (p_approver_member_id is null or a.approver_member_id = p_approver_member_id)
+      and (p_reference_type is null or upper(coalesce(a.reference_type, '')) = upper(p_reference_type))
+    group by a.approval_batch_id
+  ) row;
+
+  return jsonb_build_object(
+    'counts', v_counts,
+    'pending_rows', v_pending_rows,
+    'batch_rows', v_batch_rows
+  );
+end; $$;
+
+-- Report summary (was 2026-08-02-rpc-report-summary.sql)
+create or replace function public.rpc_get_report_summary(
+  p_group_id integer,
+  p_member_id integer default null,
+  p_start_date date default null,
+  p_end_date date default null,
+  p_as_of_date date default current_date
+)
+returns jsonb
+language plpgsql
+as $$
+declare
+  v_group record;
+  v_member_rows jsonb;
+  v_group_row jsonb;
+  v_start_date date := coalesce(p_start_date, date_trunc('month', coalesce(p_as_of_date, current_date))::date);
+  v_end_date date := coalesce(p_end_date, coalesce(p_as_of_date, current_date));
+begin
+  select g.group_id, g.group_name into v_group
+  from public.xxfp_groups g
+  where g.group_id = p_group_id;
+
+  if not found then
+    return jsonb_build_object('group_summary', '[]'::jsonb, 'member_summary', '[]'::jsonb);
+  end if;
+
+  select coalesce(jsonb_agg(row order by row->>'member_name'), '[]'::jsonb)
+    into v_member_rows
+  from (
+    select jsonb_build_object(
+      'member_id', m.member_id,
+      'member_name', coalesce(m.member_name, m.username, ''),
+      'username', coalesce(m.username, ''),
+      'status', case when upper(coalesce(m.status, '')) = 'ACTIVE' then 'Active' else coalesce(m.status, 'Inactive') end,
+      'collected', coalesce(sum(case when h.trx_date between v_start_date and v_end_date then coalesce(h.total_amount, 0) else 0 end), 0),
+      'savings', coalesce(sum(case when h.trx_date between v_start_date and v_end_date and l.line_type = 'SAVING' then l.amount else 0 end), 0),
+      'gain', coalesce(sum(case when h.trx_date between v_start_date and v_end_date and h.trx_type = 'Share Distribution' then coalesce(h.total_amount, 0) else 0 end), 0),
+      'expense', coalesce(sum(case when h.trx_date between v_start_date and v_end_date and h.trx_type = 'Group Expense Share' then coalesce(h.total_amount, 0) else 0 end), 0),
+      'share_amount', coalesce(sum(case when h.trx_date between v_start_date and v_end_date then (case when l.line_type = 'SAVING' then l.amount else 0 end) + (case when h.trx_type = 'Share Distribution' then coalesce(h.total_amount, 0) else 0 end) - (case when h.trx_type = 'Group Expense Share' then coalesce(h.total_amount, 0) else 0 end) else 0 end), 0),
+      'loan_count', coalesce(sum(case when h.trx_date between v_start_date and v_end_date and h.trx_type = 'Loan Disbursement' then 1 else 0 end), 0),
+      'principal_outstanding', coalesce(sum(case when h.trx_date between v_start_date and v_end_date and h.trx_type = 'Loan Disbursement' then coalesce(h.total_amount, 0) else 0 end), 0),
+      'interest_due', 0,
+      'penalty_due', 0,
+      'next_emi_amount', 0,
+      'next_due_date', null,
+      'total_loan_balance', 0,
+      'withdrawn', coalesce(sum(case when h.trx_date between v_start_date and v_end_date and h.trx_type = 'Withdrawal' then coalesce(h.total_amount, 0) else 0 end), 0)
+    ) as row
+    from public.xxfp_group_members m
+    left join public.xxfp_trx_header h on h.group_id = m.group_id and h.member_id = m.member_id
+    left join public.xxfp_trx_lines l on l.member_trx_id = h.member_trx_id
+    where m.group_id = p_group_id
+      and (p_member_id is null or m.member_id = p_member_id)
+    group by m.member_id, m.member_name, m.username, m.status
+  ) row;
+
+  select jsonb_build_object(
+    'group_name', v_group.group_name,
+    'member_count', coalesce(jsonb_array_length(v_member_rows), 0),
+    'collected', coalesce(sum((row->>'collected')::numeric), 0),
+    'savings', coalesce(sum((row->>'savings')::numeric), 0),
+    'gain', coalesce(sum((row->>'gain')::numeric), 0),
+    'expenses', coalesce(sum((row->>'expense')::numeric), 0),
+    'remaining', coalesce(sum((row->>'share_amount')::numeric), 0),
+    'loan_count', coalesce(sum((row->>'loan_count')::numeric), 0),
+    'loan_balance', coalesce(sum((row->>'principal_outstanding')::numeric), 0),
+    'interest_due', coalesce(sum((row->>'interest_due')::numeric), 0),
+    'penalty_due', coalesce(sum((row->>'penalty_due')::numeric), 0),
+    'share_amount', coalesce(sum((row->>'share_amount')::numeric), 0),
+    'withdrawn', coalesce(sum((row->>'withdrawn')::numeric), 0)
+  )
+    into v_group_row
+  from jsonb_array_elements(coalesce(v_member_rows, '[]'::jsonb)) as row;
+
+  return jsonb_build_object(
+    'group_summary', jsonb_build_array(coalesce(v_group_row, jsonb_build_object('group_name', v_group.group_name, 'member_count', 0, 'collected', 0, 'savings', 0, 'gain', 0, 'expenses', 0, 'remaining', 0, 'loan_count', 0, 'loan_balance', 0, 'interest_due', 0, 'penalty_due', 0, 'share_amount', 0, 'withdrawn', 0))),
+    'member_summary', coalesce(v_member_rows, '[]'::jsonb)
+  );
+end; $$;
+
+-- Share distribution range (was 2026-08-02-rpc-share-distribution-range.sql)
+create or replace function public.rpc_share_distribution_range(
+  p_group_id integer,
+  p_start_date date default null,
+  p_end_date date default current_date
+)
+returns table (
+  member_id integer,
+  member_name text,
+  share_amount numeric,
+  share_percent numeric,
+  payout_status text,
+  range_start date,
+  range_end date
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_start_date date := coalesce(p_start_date, p_end_date);
+  v_end_date date := coalesce(p_end_date, current_date);
+  v_total_share numeric := 0;
+begin
+  if not public._ensure_group_member_access(p_group_id) then
+    raise exception 'Access denied for share distribution range' using errcode = '42501';
+  end if;
+
+  with range_share as (
+    select
+      m.member_id,
+      coalesce(sum(sd.distribution_amount), 0) as share_amount
+    from public.xxfp_group_members m
+    left join public.xxfp_share_distribution sd
+      on sd.member_id = m.member_id
+     and sd.distribution_date::date between v_start_date and v_end_date
+    where m.group_id = p_group_id
+    group by m.member_id
+  )
+  select coalesce(sum(share_amount), 0)
+    into v_total_share
+  from range_share;
+
+  return query
+  with range_share as (
+    select
+      m.member_id,
+      coalesce(sum(sd.distribution_amount), 0) as share_amount
+    from public.xxfp_group_members m
+    left join public.xxfp_share_distribution sd
+      on sd.member_id = m.member_id
+     and sd.distribution_date::date between v_start_date and v_end_date
+    where m.group_id = p_group_id
+    group by m.member_id
+  )
+  select
+    m.member_id,
+    coalesce(m.member_name, m.username, '') as member_name,
+    coalesce(rs.share_amount, 0) as share_amount,
+    case
+      when v_total_share > 0 then round((coalesce(rs.share_amount, 0) / v_total_share) * 100, 2)
+      else 0
+    end as share_percent,
+    case
+      when coalesce(rs.share_amount, 0) > 0 then 'PAID'
+      else 'PENDING'
+    end as payout_status,
+    v_start_date as range_start,
+    v_end_date as range_end
+  from public.xxfp_group_members m
+  left join range_share rs on rs.member_id = m.member_id
+  where m.group_id = p_group_id
+  order by share_amount desc, member_name;
+end;
+$$;
+
+-- Share distribution snapshot (was 2026-08-02-rpc-share-distribution-snapshot.sql)
+create or replace function public.rpc_share_distribution_snapshot(
+  p_group_id integer,
+  p_reference_date date default current_date
+)
+returns table(
+  member_id integer,
+  member_name text,
+  share_amount numeric,
+  share_percent numeric,
+  payout_status text,
+  reference_date date
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_total_share numeric := 0;
+  v_reference_date date := coalesce(p_reference_date, current_date);
+begin
+  if not public._ensure_group_member_access(p_group_id) then
+    raise exception 'Access denied for share distribution snapshot' using errcode = '42501';
+  end if;
+
+  select coalesce(sum(coalesce(b.earned_from_group, 0)), 0)
+    into v_total_share
+  from public.xxfp_v_member_dashboard_balances b
+  where b.group_id = p_group_id;
+
+  return query
+  select
+    b.member_id,
+    coalesce(m.member_name, m.username, '') as member_name,
+    coalesce(b.earned_from_group, 0) as share_amount,
+    case when v_total_share > 0 then (coalesce(b.earned_from_group, 0) / v_total_share) else 0 end as share_percent,
+    case
+      when exists (
+        select 1
+        from public.xxfp_share_distribution sd
+        where sd.group_id = p_group_id
+          and sd.member_id = b.member_id
+          and sd.distribution_date::date = v_reference_date
+      ) then 'PAID'
+      else 'PENDING'
+    end as payout_status,
+    v_reference_date as reference_date
+  from public.xxfp_v_member_dashboard_balances b
+  join public.xxfp_group_members m on m.member_id = b.member_id and m.group_id = b.group_id
+  where b.group_id = p_group_id
+  order by share_amount desc;
+end; $$;
+
+-- Member collection report rows (was 2026-08-05-rpc-member-collection-report.sql)
+create or replace function public.rpc_member_collection_report_rows(
+  p_group_id integer,
+  p_member_id integer default null,
+  p_start_date date default null,
+  p_end_date date default null,
+  p_include_loan_columns boolean default false,
+  p_period_label text default null
+)
+returns table(
+  member_id bigint,
+  member_name text,
+  username text,
+  status text,
+  amount_collected numeric,
+  saving numeric,
+  principle_collected numeric,
+  interest_collected numeric,
+  penalty numeric,
+  loan_repayments numeric,
+  loan_outstanding numeric,
+  period_label text
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_start_date date := coalesce(p_start_date, date_trunc('month', current_date)::date);
+  v_end_date date := coalesce(p_end_date, current_date);
+begin
+  if not public._ensure_group_member_access(p_group_id) then
+    raise exception 'Access denied for member collection report rows' using errcode = '42501';
+  end if;
+
+  return query
+  select
+    m.member_id,
+    coalesce(m.member_name, m.username, m.email, '') as member_name,
+    coalesce(m.username, '') as username,
+    case when upper(coalesce(m.status, '')) = 'ACTIVE' then 'Active' else coalesce(m.status, 'Inactive') end as status,
+    coalesce(sum(
+      case
+        when upper(coalesce(h.trx_type, '')) = 'WITHDRAWAL' then -coalesce(h.total_amount, 0)
+        when h.trx_date between v_start_date and v_end_date then coalesce(l.amount, 0)
+        else 0
+      end
+    ), 0) as amount_collected,
+    coalesce(sum(
+      case
+        when h.trx_date between v_start_date and v_end_date and upper(coalesce(l.line_type, '')) = 'SAVING' then coalesce(l.amount, 0)
+        else 0
+      end
+    ), 0) as saving,
+    coalesce(sum(
+      case
+        when h.trx_date between v_start_date and v_end_date and upper(coalesce(l.line_type, '')) = 'LOAN_PRINCIPAL' then coalesce(l.amount, 0)
+        else 0
+      end
+    ), 0) as principle_collected,
+    coalesce(sum(
+      case
+        when h.trx_date between v_start_date and v_end_date and upper(coalesce(l.line_type, '')) = 'LOAN_INTEREST' then coalesce(l.amount, 0)
+        else 0
+      end
+    ), 0) as interest_collected,
+    coalesce(sum(
+      case
+        when h.trx_date between v_start_date and v_end_date and upper(coalesce(l.line_type, '')) = 'PENALTY' then coalesce(l.amount, 0)
+        else 0
+      end
+    ), 0) as penalty,
+    coalesce(sum(
+      case
+        when h.trx_date between v_start_date and v_end_date and upper(coalesce(l.line_type, '')) in ('LOAN_PRINCIPAL', 'LOAN_INTEREST', 'PENALTY') then coalesce(l.amount, 0)
+        else 0
+      end
+    ), 0) as loan_repayments,
+    coalesce(b.outstanding_loan, 0) + coalesce(b.outstanding_interest, 0) + coalesce(b.pending_charges, 0) as loan_outstanding,
+    p_period_label as period_label
+  from public.xxfp_group_members m
+  left join public.xxfp_v_member_dashboard_balances b on b.group_id = m.group_id and b.member_id = m.member_id
+  left join public.xxfp_trx_header h on h.group_id = m.group_id and h.member_id = m.member_id
+    and upper(coalesce(h.approval_status, 'PENDING')) in ('COMPLETED', 'APPROVED')
+  left join public.xxfp_trx_lines l on l.member_trx_id = h.member_trx_id
+  where m.group_id = p_group_id
+    and (p_member_id is null or m.member_id = p_member_id)
+  group by m.member_id, m.member_name, m.username, m.status, b.outstanding_loan, b.outstanding_interest, b.pending_charges, p_period_label
+  order by coalesce(m.member_name, m.username, '');
+end;
+$$;
+
+-- Member share distribution (was 2026-07-25-add-rpc-functions.sql, integer variant)
+create or replace function public.rpc_member_share_distribution(
+  p_group_id integer,
+  p_payout_pool numeric default 0,
+  p_reference_date date default current_date
+)
+returns table(member_id integer, member_name text, share_amount numeric)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public._ensure_group_member_access(p_group_id) then
+    raise exception 'Access denied for share distribution' using errcode = '42501';
+  end if;
+
+  return query
+  select
+    m.member_id,
+    coalesce(m.member_name, m.username, '') as member_name,
+    coalesce(ms.earned_from_group, 0) as share_amount
+  from public.xxfp_group_members m
+  left join public.xxfp_v_member_dashboard_balances ms on ms.member_id = m.member_id and ms.group_id = p_group_id
+  where m.group_id = p_group_id
+  order by share_amount desc;
+end;
+$$;
+
+-- =============================================================================
 -- 7. ROW LEVEL SECURITY ON XXFP_ TABLES
 --    The helper functions (current_auth_user_id, is_product_owner,
 --    current_member_ids, user_group_ids, is_group_member, is_group_admin,
 --    is_group_approver, member_group_id, transaction_group_id,
---    expense_group_id, loan_group_id) are already defined in
---    2026-06-06-v4-production-safe-rls.sql and keep working through the
---    compatibility views.
+--    expense_group_id, loan_group_id) are defined in
+--    2026-06-06-v4-production-safe-rls.sql and read the XXFP_ tables directly.
 -- =============================================================================
 grant usage on schema public to anon, authenticated;
 grant select, insert, update on all tables in schema public to authenticated;
@@ -1032,6 +2006,8 @@ grant usage, select on all sequences in schema public to authenticated;
 grant execute on all functions in schema public to authenticated;
 
 grant select on public.xxfp_subscription_plans to anon;
+grant execute on function public.email_registered(text) to anon, authenticated;
+grant execute on function public.resolve_login_email(text) to anon, authenticated;
 
 -- Never grant blanket delete on financial tables.
 revoke delete on all tables in schema public from authenticated;

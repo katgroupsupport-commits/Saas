@@ -31,7 +31,14 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
 
 ## Database
 
-Apply `database/schema.sql` in Supabase SQL Editor. The schema is designed around `group_id` tenancy and includes RLS policies for tenant-scoped reads.
+The v3 `xxfp_*` schema is applied from `database/` in this order in the Supabase SQL Editor:
+
+1. `database/2026-08-16-v3-xxfp-schema.sql` — creates the `xxfp_*` tables.
+2. `database/2026-08-16-v3-xxfp-migrate-data.sql` — copies v2 data into the `xxfp_*` tables (guarded, skipped on a fresh DB) and drops the old tables.
+3. `database/2026-06-06-v4-production-safe-rls.sql` — RLS helper functions used by the policies.
+4. `database/2026-08-16-v3-xxfp-functions-and-triggers.sql` — RPCs, triggers, RLS policies on the `xxfp_*` tables, and grants.
+
+The application reads and writes the `xxfp_*` tables directly; the legacy table names are not recreated.
 
 ## Development phases
 

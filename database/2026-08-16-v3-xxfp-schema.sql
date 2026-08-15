@@ -15,10 +15,10 @@
 --   XXFP_STG_* / XXFP_INT_* -> staging / interface tables (like XX EBS interfaces)
 --
 -- Column names intentionally match the previous v2 tables so the application
--- layer and compatibility views keep working without mapper changes.
+-- layer keeps working without mapper changes.
 --
 -- The companion files are:
---   2026-08-16-v3-xxfp-migrate-data.sql        (data copy + compat views)
+--   2026-08-16-v3-xxfp-migrate-data.sql        (data copy from v2 + dashboard views)
 --   2026-08-16-v3-xxfp-functions-and-triggers.sql (procedures + RLS + grants)
 -- =============================================================================
 

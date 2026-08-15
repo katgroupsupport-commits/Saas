@@ -87,7 +87,7 @@ Deno.serve(async (req) => {
 
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
     const { data: plan, error: planError } = await adminClient
-      .from("subscription_plans")
+      .from("xxfp_subscription_plans")
       .select("*")
       .eq("plan_name", body.planName)
       .eq("duration", body.duration)
@@ -100,7 +100,7 @@ Deno.serve(async (req) => {
     const transactionReference = `${body.razorpay_payment_id}|${body.razorpay_order_id}`;
 
     const { data: subscription, error: subscriptionError } = await adminClient
-      .from("group_subscriptions")
+      .from("xxfp_group_subscriptions")
       .insert([{
         group_id: groupId,
         subscription_plan_id: plan.subscription_plan_id,
